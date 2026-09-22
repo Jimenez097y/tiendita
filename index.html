@@ -173,7 +173,7 @@ label.f textarea{resize:vertical;min-height:44px}
 .gate .logo{width:88px;height:88px;margin:0 auto 14px;border-radius:50%;background:var(--pink-soft);border:2px solid var(--ink);display:grid;place-items:center}
 .gate .logo svg{width:46px;height:46px}
 .gate h1{font-family:"Chewy","Comic Sans MS",cursive;font-weight:400;font-size:34px;margin:0;line-height:1}
-.gate .sub{color:var(--muted);font-size:13px;font-weight:700;margin-top:6px}
+.gate .hero .sub{display:block;color:var(--muted);font-size:13px;font-weight:700;margin-top:6px}
 .gate form{display:flex;flex-direction:column;gap:12px;width:100%;max-width:340px;margin:0 auto}
 .gate .msg{font-size:13px;font-weight:700;border-radius:10px;padding:9px 11px}
 .gate .msg.err{background:var(--red-bg);color:var(--red)}
@@ -263,12 +263,14 @@ const METODOS=["Efectivo","Yape","Plin","Tarjeta","Transferencia"];
 
 /* ===================== STATE ===================== */
 const S={addTo:null,owner:false,creating:false,online:true,session:null,accounts:[],gateMode:"loading",gateMsg:null,acctForm:{nombre:"",usuario:"",clave:"",rol:"mesero"},view:"carta",cat:"all",q:"",cart:[],form:blankForm(),editing:null,orders:[],filter:"activos",range:"hoy",confirmDel:null,db:null,col:null};
-function blankForm(){return{cliente:"",telefono:"",tipo:"Para llevar",detalle:"",metodo:"Efectivo",pago:"Pendiente",adelanto:"",notas:""}}
+function blankForm(){return{cliente:"",telefono:"",tipo:"Para llevar",detalle:"",metodo:"Efectivo",pago:"Pendiente",adelanto:"",notas:"",delivery:""}}
 
 const $=s=>document.querySelector(s);
 const esc=s=>String(s??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
 const money=n=>"S/ "+(Math.round(n*100)/100).toFixed(2);
 const cartTotal=()=>S.cart.reduce((a,l)=>a+l.p*l.q,0);
+const delivFee=()=>S.form.tipo==="Delivery"?Math.max(Math.round((parseFloat(S.form.delivery)||0)*100)/100,0):0;
+const orderTotal=()=>cartTotal()+delivFee();
 const dayKey=d=>{const x=new Date(d);return x.getFullYear()+"-"+String(x.getMonth()+1).padStart(2,"0")+"-"+String(x.getDate()).padStart(2,"0")};
 const hhmm=d=>new Date(d).toLocaleTimeString("es-PE",{hour:"2-digit",minute:"2-digit"});
 function toast(msg){const t=$("#toast");t.textContent=msg;t.hidden=false;clearTimeout(toast._t);toast._t=setTimeout(()=>t.hidden=true,2200)}
@@ -469,7 +471,7 @@ function nextNumber(){
 async function submitOrder(){
   if(!S.cart.length)return;
   if(S.addTo)return addRound();
-  const f=S.form,total=cartTotal();
+  const f=S.form,subtotal=cartTotal(),delivery=delivFee(),total=subtotal+delivery;
   const adel=f.pago==="Adelanto"?Math.min(parseFloat(f.adelanto)||0,total):f.pago==="Pagado"?total:0;
   const base=S.editing?S.orders.find(o=>o.id===S.editing):null;
   const o={
@@ -478,7 +480,7 @@ async function submitOrder(){
     createdAt:base?base.createdAt:Date.now(),updatedAt:Date.now(),
     estado:base?base.estado:"pendiente",
     cliente:f.cliente.trim(),telefono:f.telefono.replace(/[^\d+]/g,""),tipo:f.tipo,detalle:f.detalle.trim(),
-    items:S.cart.map(l=>({n:l.n,p:l.p,q:l.q,nota:l.nota.trim(),r:l.r||(base?maxRound(base):1)})),total,rondas:base?(base.rondas||[]):[],cerrada:base?!!base.cerrada:false,
+    items:S.cart.map(l=>({n:l.n,p:l.p,q:l.q,nota:l.nota.trim(),r:l.r||(base?maxRound(base):1)})),subtotal,delivery,total,rondas:base?(base.rondas||[]):[],cerrada:base?!!base.cerrada:false,
     metodo:f.metodo,pago:f.pago,pagado:adel,notas:f.notas.trim()
   };
   const btn=$("#send");if(btn)btn.disabled=true;
@@ -489,7 +491,7 @@ async function submitOrder(){
 function editOrder(id){
   const o=S.orders.find(x=>x.id===id);if(!o)return;
   S.addTo=null;S.editing=id;S.cart=o.items.map(i=>({...i,nota:i.nota||""}));
-  S.form={cliente:o.cliente||"",telefono:o.telefono||"",tipo:o.tipo||"Para llevar",detalle:o.detalle||"",metodo:o.metodo||"Efectivo",pago:o.pago||"Pendiente",adelanto:o.pago==="Adelanto"?String(o.pagado||""):"",notas:o.notas||""};
+  S.form={cliente:o.cliente||"",telefono:o.telefono||"",tipo:o.tipo||"Para llevar",detalle:o.detalle||"",metodo:o.metodo||"Efectivo",pago:o.pago||"Pendiente",adelanto:o.pago==="Adelanto"?String(o.pagado||""):"",notas:o.notas||"",delivery:o.delivery?String(o.delivery):""};
   setView("pedido");
 }
 
@@ -506,7 +508,7 @@ async function addRound(){
   if(!S.cart.length)return;
   const r=maxRound(o)+1;
   const items=[...o.items.map(i=>({...i,r:i.r||1})),...S.cart.map(l=>({n:l.n,p:l.p,q:l.q,nota:l.nota.trim(),r}))];
-  const total=items.reduce((a,i)=>a+i.p*i.q,0),pag=o.pagado||0;
+  const total=items.reduce((a,i)=>a+i.p*i.q,0)+(o.delivery||0),pag=o.pagado||0;
   const patch={items,total,updatedAt:Date.now(),
     estado:["listo","entregado"].includes(o.estado)?"pendiente":o.estado,
     pago:pag>=total-0.001?"Pagado":pag>0?"Adelanto":"Pendiente",
@@ -525,6 +527,7 @@ function waText(o){
   if(o.cliente)L.push(`Cliente: ${o.cliente}`);
   L.push(`${o.tipo}${o.detalle?": "+o.detalle:""}`,"");
   o.items.forEach(i=>L.push(`• ${i.q} x ${i.n} — ${money(i.p*i.q)}${i.nota?`\n   _${i.nota}_`:""}`));
+  if(o.delivery)L.push(`Delivery: ${money(o.delivery)}`);
   L.push("",`*Total: ${money(o.total)}*`);
   if(o.pago==="Pagado")L.push(`Pagado (${o.metodo}) ✅`);
   else if(o.pago==="Adelanto")L.push(`Adelanto: ${money(o.pagado)} (${o.metodo}) · Saldo: ${money(o.total-o.pagado)}`);
@@ -546,13 +549,13 @@ async function exportExcel(list){
   const rows=list.slice().sort((a,b)=>a.createdAt-b.createdAt).map(o=>({
     "N°":o.numero,"Fecha":new Date(o.createdAt).toLocaleDateString("es-PE"),"Hora":hhmm(o.createdAt),
     "Cliente":o.cliente||"","Teléfono":o.telefono||"","Tipo":o.tipo,"Mesa/Dirección":o.detalle||"",
-    "Productos":o.items.map(i=>`${i.q}x ${i.n}`).join("; "),"Total (S/)":o.total,
+    "Productos":o.items.map(i=>`${i.q}x ${i.n}`).join("; "),"Subtotal (S/)":o.subtotal??(o.total-(o.delivery||0)),"Delivery (S/)":o.delivery||0,"Total (S/)":o.total,
     "Método":o.metodo,"Pago":o.pago,"Pagado (S/)":o.pagado||0,"Saldo (S/)":Math.round((o.total-(o.pagado||0))*100)/100,
     "Estado":ESTADOS.find(e=>e.k===o.estado)?.t||o.estado,"Notas":o.notas||""}));
   const det=[];list.forEach(o=>o.items.forEach(i=>det.push({"N°":o.numero,"Fecha":new Date(o.createdAt).toLocaleDateString("es-PE"),"Ronda":i.r||1,"Producto":i.n,"Cant.":i.q,"P. unit (S/)":i.p,"Subtotal (S/)":i.p*i.q,"Nota":i.nota||"","Estado":o.estado})));
   const agg={};list.filter(o=>o.estado!=="cancelado").forEach(o=>o.items.forEach(i=>{agg[i.n]=agg[i.n]||{"Producto":i.n,"Unidades":0,"Venta (S/)":0};agg[i.n].Unidades+=i.q;agg[i.n]["Venta (S/)"]+=i.p*i.q}));
   const wb=XLSX.utils.book_new();
-  const ws1=XLSX.utils.json_to_sheet(rows);ws1["!cols"]=[{wch:5},{wch:11},{wch:7},{wch:18},{wch:12},{wch:11},{wch:18},{wch:50},{wch:10},{wch:12},{wch:10},{wch:11},{wch:10},{wch:11},{wch:25}];
+  const ws1=XLSX.utils.json_to_sheet(rows);ws1["!cols"]=[{wch:5},{wch:11},{wch:7},{wch:18},{wch:12},{wch:11},{wch:18},{wch:50},{wch:11},{wch:11},{wch:10},{wch:12},{wch:10},{wch:11},{wch:10},{wch:11},{wch:25}];
   XLSX.utils.book_append_sheet(wb,ws1,"Pedidos");
   const ws2=XLSX.utils.json_to_sheet(det);ws2["!cols"]=[{wch:5},{wch:11},{wch:6},{wch:40},{wch:6},{wch:11},{wch:12},{wch:25},{wch:11}];
   XLSX.utils.book_append_sheet(wb,ws2,"Detalle");
@@ -613,7 +616,7 @@ function mesaChips(label){
 }
 function renderPedido(){
   if(S.addTo){const o=S.orders.find(x=>x.id===S.addTo);if(o&&isOpenMesa(o))return renderAddTo(o);S.addTo=null}
-  const f=S.form,total=cartTotal(),adel=parseFloat(f.adelanto)||0;
+  const f=S.form,total=orderTotal(),adel=parseFloat(f.adelanto)||0;
   const match=!S.editing&&f.tipo==="En local"&&mesaKey(f.detalle)?openMesas().find(o=>mesaKey(o.detalle)===mesaKey(f.detalle)):null;
   const title=S.editing?`Editando #${S.orders.find(o=>o.id===S.editing)?.numero??""} <span class="edit">edición</span>`:`Pedido #${nextNumber()}`;
   return`<div class="h2"><span>${title}</span></div>
@@ -624,7 +627,8 @@ function renderPedido(){
       <label class="f"><span>Cliente</span><input id="f-cliente" data-f="cliente" value="${esc(f.cliente)}" placeholder="Nombre"></label>
       <label class="f"><span>Celular</span><input id="f-telefono" data-f="telefono" inputmode="tel" value="${esc(f.telefono)}" placeholder="9XX XXX XXX"></label>
       <div class="full"><div class="seg" data-seg="tipo">${TIPOS.map(t=>`<button data-v="${t}" aria-pressed="${f.tipo===t}">${t}</button>`).join("")}</div></div>
-      <label class="f full"><span>${f.tipo==="Delivery"?"Dirección":f.tipo==="En local"?"Mesa":"Hora de recojo / referencia"}</span><input id="f-detalle" data-f="detalle" value="${esc(f.detalle)}" ${f.tipo==="En local"?'inputmode="numeric" placeholder="N° de mesa"':""}></label>
+      <label class="f full"><span>${f.tipo==="Delivery"?"Dirección":f.tipo==="En local"?"Mesa":"Hora de recojo / referencia"}</span><input id="f-detalle" data-f="detalle" value="${esc(f.detalle)}" ${f.tipo==="En local"?'inputmode="numeric" placeholder="N° de mesa"':f.tipo==="Delivery"?'placeholder="Calle, referencia, zona"':""}></label>
+      ${f.tipo==="Delivery"?`<label class="f full"><span>Costo del delivery (S/) · según la zona</span><input id="f-delivery" data-f="delivery" inputmode="decimal" value="${esc(f.delivery)}" placeholder="0.00"></label>`:""}
       ${match?`<div class="banner"><span>${esc(mesaLabel(match))} ya tiene el pedido #${match.numero} abierto.</span><button data-addto="${match.id}">Agregar a ese pedido</button></div>`:""}
       <label class="f"><span>Método de pago</span><select id="f-metodo" data-f="metodo">${METODOS.map(m=>`<option ${f.metodo===m?"selected":""}>${m}</option>`).join("")}</select></label>
       <label class="f"><span>Pago</span><select id="f-pago" data-f="pago">${["Pendiente","Adelanto","Pagado"].map(m=>`<option ${f.pago===m?"selected":""}>${m}</option>`).join("")}</select></label>
@@ -632,7 +636,8 @@ function renderPedido(){
       <label class="f full"><span>Notas del pedido</span><textarea id="f-notas" data-f="notas" rows="2">${esc(f.notas)}</textarea></label>
    </div>
    <div class="checkout">
-    <div class="total"><span>Total</span><strong class="num">${money(total)}</strong></div>
+    ${f.tipo==="Delivery"?`<div class="sub"><span>Productos</span><span class="num">${money(cartTotal())}</span></div><div class="sub"><span>Delivery</span><span class="num" id="deliv-val">${money(delivFee())}</span></div>`:""}
+    <div class="total"><span>Total</span><strong class="num" id="tot-val">${money(total)}</strong></div>
     ${f.pago==="Adelanto"&&total?`<div class="saldo num">Saldo por cobrar: ${money(Math.max(total-adel,0))}</div>`:""}
     <button class="btn primary" id="send" ${S.cart.length?"":"disabled"}>${S.editing?"Guardar cambios":"Registrar pedido"}</button>
     ${S.cart.length||S.editing?`<button class="btn ghost" id="clear">${S.editing?"Cancelar edición":"Vaciar pedido"}</button>`:""}
@@ -700,6 +705,7 @@ function orderCard(o){
    ${o.cliente||o.telefono?`<div class="who">${esc(o.cliente||"")}${o.telefono?` <span class="meta num">${esc(o.telefono)}</span>`:""}</div>`:""}
    <ul>${itemsHtml(o)}</ul>
    ${o.notas?`<div class="meta">Nota: ${esc(o.notas)}</div>`:""}
+   ${o.delivery?`<div class="meta num" style="display:flex;justify-content:space-between"><span>Delivery</span><span>${money(o.delivery)}</span></div>`:""}
    <div class="tot"><span class="num">${money(o.total)}</span>${pt}</div>
    ${S.confirmDel===o.id?`<div class="confirm">¿Borrar el pedido #${o.numero}? <button class="y" data-del-yes="${o.id}">Sí, borrar</button><button class="n" data-del-no>No</button></div>`:""}
    <div class="acts">${!S.owner?`
@@ -791,7 +797,7 @@ $("#app").addEventListener("input",e=>{
   if(t.dataset.a){S.acctForm[t.dataset.a]=t.value;return}
   if(t.dataset.nota!=null){S.cart[+t.dataset.nota].nota=t.value;return}
   if(t.dataset.f==="detalle"&&S.form.tipo==="En local"){S.form.detalle=t.value;render();return}
-  if(t.dataset.f){S.form[t.dataset.f]=t.value;if(t.dataset.f==="adelanto"){const s=document.querySelector(".saldo");if(s)s.textContent="Saldo por cobrar: "+money(Math.max(cartTotal()-(parseFloat(t.value)||0),0))}}
+  if(t.dataset.f){S.form[t.dataset.f]=t.value;if(t.dataset.f==="adelanto"||t.dataset.f==="delivery"){const s=document.querySelector(".saldo");if(s)s.textContent="Saldo por cobrar: "+money(Math.max(orderTotal()-(parseFloat(S.form.adelanto)||0),0));const tv=$("#tot-val");if(tv)tv.textContent=money(orderTotal());const dv=$("#deliv-val");if(dv)dv.textContent=money(delivFee())}}
 });
 $("#app").addEventListener("submit",async e=>{
   if(e.target.id!=="acctform")return;e.preventDefault();
