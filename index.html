@@ -184,6 +184,7 @@ label.f textarea{resize:vertical;min-height:44px}
 .me{display:flex;align-items:center;gap:7px;border:0;background:transparent;padding:4px 2px;font-weight:800;font-size:13px;max-width:50%}
 .me .av{flex:0 0 30px;width:30px;height:30px;border-radius:50%;display:grid;place-items:center;font-size:13px;font-weight:800;border:1.5px solid var(--ink);position:relative}
 .me .av.own{background:var(--ink);color:var(--bg)}
+.me .av.kit,.acct .av.kit{border-color:var(--pink);border-style:dashed}
 .me .nm{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .me .dot{position:absolute;right:-2px;bottom:-2px;width:10px;height:10px;border-radius:50%;border:2px solid var(--bg);background:var(--green)}
 .me .dot.local{background:var(--amber)}.me .dot.wait{background:var(--grey)}
@@ -324,11 +325,11 @@ function subscribeOrders(){
     err=>{console.error(err);renderMe(false);toast(fbErr(err))});
 }
 function enter(acct){
-  S.session=acct;S.owner=acct.rol==="propietario";
+  S.session=acct;S.owner=acct.rol==="propietario";S.cocina=acct.rol==="cocina";if(S.cocina)S.range="hoy";
   $("#gate").hidden=true;
   $("#tab-equipo").hidden=!S.owner;
   $("#phone").style.setProperty("--tabs",S.owner?4:3);
-  const lbl=document.getElementById("lbl-pedidos");if(lbl)lbl.textContent=S.owner?"Pedidos":"Despacho";
+  const lbl=document.getElementById("lbl-pedidos");if(lbl)lbl.textContent=S.owner||S.cocina?"Pedidos":"Despacho";
   subscribeOrders();
   if(S.owner)loadAccounts();
   S.view="carta";document.querySelectorAll("nav.bottom button").forEach(b=>b.setAttribute("aria-selected",b.dataset.view==="carta"));
@@ -338,7 +339,7 @@ function enter(acct){
 }
 async function logout(){
   if(unsubOrders){unsubOrders();unsubOrders=null}
-  S.session=null;S.owner=false;S.orders=[];S.accounts=[];S.cart=[];S.form=blankForm();S.editing=null;S.addTo=null;
+  S.session=null;S.owner=false;S.cocina=false;S.orders=[];S.accounts=[];S.cart=[];S.form=blankForm();S.editing=null;S.addTo=null;
   $("#modal").innerHTML="";S.gateMode="login";S.gateMsg=null;
   try{await auth.signOut()}catch(e){}
 }
@@ -346,7 +347,7 @@ function renderMe(ok){
   const me=$("#me"),a=S.session;if(!a){me.hidden=true;return}
   if(ok!==undefined)S.online=ok;
   me.hidden=false;
-  me.innerHTML=`<span class="av${S.owner?" own":""}">${esc(initials(a.nombre))}<i class="dot ${S.online===false?"local":""}"></i></span><span class="nm">${esc(a.nombre.split(" ")[0])}</span>`;
+  me.innerHTML=`<span class="av${S.owner?" own":S.cocina?" kit":""}">${esc(initials(a.nombre))}<i class="dot ${S.online===false?"local":""}"></i></span><span class="nm">${esc(a.nombre.split(" ")[0])}</span>`;
 }
 $("#me").onclick=()=>{
   const a=S.session;if(!a)return;
@@ -662,24 +663,24 @@ function renderDespacho(){
    <div class="orders">${list.length?list.map(orderCard).join(""):`<div class="empty">No hay pedidos en curso.</div>`}</div>`;
 }
 function renderPedidos(){
-  if(!S.owner)return renderDespacho();
+  if(!S.owner&&!S.cocina)return renderDespacho();
   const base=S.orders.filter(inRange),valid=base.filter(o=>o.estado!=="cancelado");
   const venta=valid.reduce((a,o)=>a+o.total,0),cobrado=valid.reduce((a,o)=>a+(o.pagado||0),0);
   const activos=base.filter(o=>["pendiente","preparando","listo"].includes(o.estado)).length;
   const list=filtered();
-  const F=[["activos","En curso"],["pendiente","Pendientes"],["preparando","Preparando"],["listo","Listos"],["entregado","Entregados"],["porcobrar","Por cobrar"],["todos","Todos"]];
+  const F=[["activos","En curso"],["pendiente","Pendientes"],["preparando","Preparando"],["listo","Listos"],["entregado","Entregados"],...(S.owner?[["porcobrar","Por cobrar"]]:[]),["todos","Todos"]];
   return`<div class="kpis">
     <div class="kpi"><div class="k">Pedidos ${S.range==="hoy"?"hoy":"total"}</div><div class="v num">${valid.length}</div></div>
     <div class="kpi"><div class="k">En curso</div><div class="v num">${activos}</div></div>
-    <div class="kpi"><div class="k">Venta</div><div class="v num">${money(venta)}</div></div>
-    <div class="kpi"><div class="k">Por cobrar</div><div class="v num" style="color:${venta-cobrado>0.001?"var(--red)":"inherit"}">${money(venta-cobrado)}</div></div>
+    ${S.owner?`<div class="kpi"><div class="k">Venta</div><div class="v num">${money(venta)}</div></div>
+    <div class="kpi"><div class="k">Por cobrar</div><div class="v num" style="color:${venta-cobrado>0.001?"var(--red)":"inherit"}">${money(venta-cobrado)}</div></div>`:""}
    </div>
    <div class="stick">
     <div class="cats" data-seg="filter">${F.map(([k,t])=>`<button data-v="${k}" aria-pressed="${S.filter===k}">${t}</button>`).join("")}</div>
-    <div class="tools">
+    ${S.owner?`<div class="tools">
      <select id="range" aria-label="Periodo"><option value="hoy" ${S.range==="hoy"?"selected":""}>Hoy</option><option value="todo" ${S.range==="todo"?"selected":""}>Últimos 45 días</option></select>
      <button id="xls">Exportar Excel</button>
-    </div>
+    </div>`:""}
    </div>
    <div class="orders">${list.length?list.map(orderCard).join(""):`<div class="empty">No hay pedidos en esta vista.</div>`}</div>`;
 }
@@ -708,7 +709,9 @@ function orderCard(o){
    ${o.delivery?`<div class="meta num" style="display:flex;justify-content:space-between"><span>Delivery</span><span>${money(o.delivery)}</span></div>`:""}
    <div class="tot"><span class="num">${money(o.total)}</span>${pt}</div>
    ${S.confirmDel===o.id?`<div class="confirm">¿Borrar el pedido #${o.numero}? <button class="y" data-del-yes="${o.id}">Sí, borrar</button><button class="n" data-del-no>No</button></div>`:""}
-   <div class="acts">${!S.owner?`
+   <div class="acts">${S.cocina?`
+    ${nx?`<button class="adv" data-adv="${o.id}">Pasar a ${ESTADOS.find(x=>x.k===nx).t} →</button>`:""}
+    <a class="wa" href="${waHref(o)}" target="_blank" rel="noopener">WhatsApp</a>`:!S.owner?`
     ${o.estado==="listo"?`<button class="adv" data-adv="${o.id}">Entregado en mesa ✓</button>`:`<span class="meta" style="grid-column:1/-1;text-align:center">En cocina · aún no está listo</span>`}
     ${isOpenMesa(o)?`<button data-addto="${o.id}">+ Agregar</button>`:""}
     <a class="wa" href="${waHref(o)}" target="_blank" rel="noopener">WhatsApp</a>`:`
@@ -726,15 +729,15 @@ function renderEquipo(){
   if(!S.owner)return"";
   const f=S.acctForm,me=S.session?.id;
   return`<div class="h2"><span>Equipo</span></div>
-   <div class="team">${S.accounts.map(a=>`<div class="acct"><span class="av${a.rol==="propietario"?" own":""}">${esc(initials(a.nombre))}</span>
-     <div class="i"><b>${esc(a.nombre)}${a.id===me?" (tú)":""}</b><span>@${esc(a.usuario)} · ${a.rol==="propietario"?"propietario":"mesero"}${a.activo===false?" · desactivado":""}</span></div>
+   <div class="team">${S.accounts.map(a=>`<div class="acct"><span class="av${a.rol==="propietario"?" own":a.rol==="cocina"?" kit":""}">${esc(initials(a.nombre))}</span>
+     <div class="i"><b>${esc(a.nombre)}${a.id===me?" (tú)":""}</b><span>@${esc(a.usuario)} · ${a.rol==="propietario"?"propietario":a.rol==="cocina"?"cocina":"mesero"}${a.activo===false?" · desactivado":""}</span></div>
      ${a.id===me?"":a.activo===false?`<button data-acct-on="${a.id}" style="color:var(--green)">Reactivar</button>`:S.confirmDel==="acct:"+a.id?`<button data-acct-yes="${a.id}">¿Seguro?</button>`:`<button data-acct-del="${a.id}">Desactivar</button>`}</div>`).join("")||`<div class="empty">Cargando…</div>`}</div>
    <form class="card" id="acctform" autocomplete="off"><h3>Nuevo usuario</h3>
     <div class="fields">
      <label class="f full"><span>Nombre</span><input id="a-nombre" data-a="nombre" value="${esc(f.nombre)}" required maxlength="40"></label>
      <label class="f"><span>Usuario</span><input id="a-usuario" data-a="usuario" value="${esc(f.usuario)}" required maxlength="30" autocapitalize="none" spellcheck="false"></label>
      <label class="f"><span>Clave</span><input id="a-clave" data-a="clave" value="${esc(f.clave)}" required minlength="6" placeholder="mín. 6"></label>
-     <div class="full"><div class="seg" data-seg="rol">${[["mesero","Mesero"],["propietario","Propietario"]].map(([k,t])=>`<button type="button" data-v="${k}" aria-pressed="${f.rol===k}">${t}</button>`).join("")}</div></div>
+     <div class="full"><div class="seg" data-seg="rol">${[["mesero","Mesero"],["cocina","Cocina"],["propietario","Propietario"]].map(([k,t])=>`<button type="button" data-v="${k}" aria-pressed="${f.rol===k}">${t}</button>`).join("")}</div></div>
     </div>
     <button class="btn primary" type="submit" style="margin-top:12px">Crear usuario</button>
     <div class="note">Entrega el usuario y la clave en persona; cada uno puede cambiar su clave tocando su nombre arriba. Si alguien olvida su clave o deja de trabajar contigo, desactívalo y créale un usuario nuevo (un usuario no se puede repetir).</div>
@@ -780,7 +783,7 @@ $("#app").addEventListener("click",e=>{
   if(b.id==="clear"){S.addTo=null;S.cart=[];S.form=blankForm();S.editing=null;render();return}
   if(b.id==="xls"){exportExcel(filtered());return}
   if(!S.owner&&(d.pay||d.edit||d.cancel||d.reopen||d.del||d.delYes||b.id==="xls"))return;
-  if(d.adv){const o=S.orders.find(x=>x.id===d.adv);if(!S.owner&&o.estado!=="listo")return;patchOrder(d.adv,{estado:NEXT[o.estado],updatedAt:Date.now()});return}
+  if(d.adv){const o=S.orders.find(x=>x.id===d.adv);if(!S.owner&&!S.cocina&&o.estado!=="listo")return;patchOrder(d.adv,{estado:NEXT[o.estado],updatedAt:Date.now()});return}
   if(d.addto){startAddTo(d.addto);return}
   if(d.close&&S.owner){patchOrder(d.close,{cerrada:true,updatedAt:Date.now()});toast("Mesa cerrada");return}
   if(d.pay){const o=S.orders.find(x=>x.id===d.pay);patchOrder(d.pay,{pagado:o.total,pago:"Pagado",cerrada:o.tipo==="En local"?true:!!o.cerrada,updatedAt:Date.now()});toast("Cobrado #"+o.numero);return}
