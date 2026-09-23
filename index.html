@@ -78,6 +78,13 @@ nav.bottom .badge[hidden]{display:none}
 .item{display:flex;flex-direction:column;justify-content:space-between;gap:6px;text-align:left;background:var(--surface);border:1px solid var(--line);border-radius:13px;padding:10px 11px;min-height:78px;position:relative;transition:transform .08s}
 .item:active{transform:scale(.96)}
 .item.on{border-color:var(--pink);background:var(--pink-soft)}
+.item.off{opacity:.45;background:var(--surface2);border-style:dashed}
+.item.off .p{color:var(--muted);text-decoration:line-through}
+.item .ag{position:absolute;bottom:10px;right:10px;font-size:10px;font-weight:800;letter-spacing:.05em;text-transform:uppercase;background:var(--red-bg);color:var(--red);border-radius:999px;padding:2px 7px}
+.item.edit{border-style:dashed}
+.dispbar{display:flex;gap:8px;align-items:center;justify-content:space-between;margin-top:8px;font-size:13px;font-weight:700}
+.dispbar button{border:1.5px solid var(--ink);background:transparent;border-radius:999px;padding:6px 12px;font-weight:800;font-size:12px}
+.dispbar button.on{background:var(--ink);color:var(--bg)}
 .item .n{font-weight:700;font-size:13.5px;line-height:1.25}
 .item .d{font-size:11.5px;color:var(--muted)}
 .item .p{font-weight:800;color:var(--pink);font-size:14px}
@@ -252,7 +259,7 @@ const MENU=[
  {id:"jugos",t:"Jugos (con agua)",items:[["Jugo surtido",4],["Jugo de papaya",5],["Jugo de piña",6],["Jugo de mora",7],["Jugo de fresa",7],["Jugo de mango",7]]},
  {id:"batidos",t:"Batidos (con leche)",items:[["Batido de papaya",6],["Batido de plátano",6],["Batido de mora",8],["Batido de fresa",8],["Batido de mango",8],["Batido de melón",7],["Batido de lúcuma",10]]},
  {id:"frappes",t:"Frappés",items:[["Frappé de vainilla",13],["Frappé de chocolate",13],["Frappé de oreo",13],["Frappé de manjar blanco",14],["Frappé de fresa",14],["Frappé de mora",14],["Frappé de mango",14],["Frappé de frutos rojos",16]]},
- {id:"postres",t:"Postres",items:[["Torta de chocolate",8],["Tres leches clásica",8],["Tres leches de oreo",8.5],["Cheesecake",9,"maracuyá o mora",{pick:1,from:["Maracuyá","Mora"]}],["Crema volteada",7],["Tiramisú de mango",10],["Pie de limón",7.5],["Torta helada",7.5],["Cheesecake de oreo",10.5],["Pastel matilda",9]]},
+ {id:"postres",t:"Postres",items:[["Torta de chocolate",8],["Cheesecake de maracuyá",9],["Cheesecake de mora",9],["Cheesecake de fresa",9],["Crema volteada",7],["Pie de limón",7.5],["Torta helada de fresa",7.5],["Torta helada de piña",7.5],["Tiramisú de café",10],["Pastel Matilda",9],["Cajita de alfajores",5],["Brownie",5],["Kekito de limón",3],["Kekito de naranja",3],["Kekito banana y chocolate",3.5],["Tres leches clásica",8],["Tres leches de oreo",8.5],["Tiramisú de mango",10],["Cheesecake de oreo",10.5]]},
  {id:"galletas",t:"Galletas",items:[["Galleta Oreo",5],["Galleta Chocoteja",5],["Galleta Red velvet",5],["Galleta Pay de limón",6],["Galleta Tiramisú",6],["Galleta Beso de moza",6],["Galleta Tres leches",6],["Galleta Cheesecake de mora",6]]}
 ].map(c=>({...c,items:c.items.map(([n,p,d,o])=>({n,p,d:d||"",o:o||null}))}));
 
@@ -320,6 +327,19 @@ function boot(){
     }catch(e){await auth.signOut();S.gateMsg={t:"err",x:fbErr(e)};renderGate()}
   });
 }
+let unsubDisp=null;
+S.agotados=new Set();S.dispEdit=false;
+function subscribeDisp(){
+  if(unsubDisp)unsubDisp();
+  unsubDisp=fdb.collection("config").doc("disponibilidad").onSnapshot(d=>{S.agotados=new Set((d.exists&&d.data().agotados)||[]);render()},e=>console.error(e));
+}
+const canEditDisp=()=>S.owner||S.cocina;
+async function toggleAgotado(n){
+  const set=new Set(S.agotados);set.has(n)?set.delete(n):set.add(n);
+  S.agotados=set;render();
+  try{await fdb.collection("config").doc("disponibilidad").set({agotados:[...set],updatedAt:Date.now(),por:S.session?.nombre||""})}
+  catch(e){toast(fbErr(e))}
+}
 function subscribeOrders(){
   if(unsubOrders)unsubOrders();
   const q=S.owner
@@ -334,7 +354,7 @@ function enter(acct){
   $("#tab-equipo").hidden=!S.owner;
   $("#phone").style.setProperty("--tabs",S.owner?4:3);
   const lbl=document.getElementById("lbl-pedidos");if(lbl)lbl.textContent=S.owner||S.cocina?"Pedidos":"Despacho";
-  subscribeOrders();
+  subscribeOrders();subscribeDisp();
   if(S.owner)loadAccounts();
   S.view="carta";document.querySelectorAll("nav.bottom button").forEach(b=>b.setAttribute("aria-selected",b.dataset.view==="carta"));
   renderMe(true);render();
@@ -343,6 +363,7 @@ function enter(acct){
 }
 async function logout(){
   if(unsubOrders){unsubOrders();unsubOrders=null}
+  if(unsubDisp){unsubDisp();unsubDisp=null}S.dispEdit=false;
   S.session=null;S.owner=false;S.cocina=false;S.despTab="despachar";S.orders=[];S.accounts=[];S.cart=[];S.form=blankForm();S.editing=null;S.addTo=null;
   $("#modal").innerHTML="";S.gateMode="login";S.gateMsg=null;
   try{await auth.signOut()}catch(e){}
@@ -476,6 +497,7 @@ function nextNumber(){
 async function submitOrder(){
   if(!S.cart.length)return;
   if(S.addTo)return addRound();
+  if(S.form.tipo==="En local"&&!mesaKey(S.form.detalle)){toast("Escribe el número de mesa");const i=$("#f-detalle");if(i)i.focus();return}
   const f=S.form,subtotal=cartTotal(),delivery=delivFee(),total=subtotal+delivery;
   const adel=f.pago==="Adelanto"?Math.min(parseFloat(f.adelanto)||0,total):f.pago==="Pagado"?total:0;
   const base=S.editing?S.orders.find(o=>o.id===S.editing):null;
@@ -502,14 +524,15 @@ function editOrder(id){
 
 /* ===================== MESAS ===================== */
 const mesaKey=s=>String(s||"").trim().toLowerCase().replace(/^mesa\s*/,"");
-const mesaLabel=o=>/^\s*mesa/i.test(o.detalle||"")?o.detalle.trim():"Mesa "+(o.detalle||"").trim();
-const isOpenMesa=o=>o.tipo==="En local"&&!o.cerrada&&o.estado!=="cancelado"&&mesaKey(o.detalle)!==""&&dayKey(o.createdAt)===dayKey(Date.now());
+const mesaLabel=o=>o.tipo!=="En local"?(o.cliente?o.cliente.split(" ")[0]:o.tipo)+" · #"+o.numero:!mesaKey(o.detalle)?"Mesa s/n · #"+o.numero:/^\s*mesa/i.test(o.detalle)?o.detalle.trim():"Mesa "+o.detalle.trim();
+const canAddRound=o=>!o.cerrada&&o.estado!=="cancelado"&&dayKey(o.createdAt)===dayKey(Date.now());
+const isOpenMesa=o=>o.tipo==="En local"&&canAddRound(o);
 const openMesas=()=>S.orders.filter(isOpenMesa).sort((a,b)=>mesaKey(a.detalle).localeCompare(mesaKey(b.detalle),"es",{numeric:true}));
 const maxRound=o=>o.items.reduce((a,i)=>Math.max(a,i.r||1),1);
 function startAddTo(id){S.addTo=id;S.editing=null;if(!S.cart.length)setView("carta");else setView("pedido")}
 async function addRound(){
   const o=S.orders.find(x=>x.id===S.addTo);
-  if(!o||!isOpenMesa(o)){toast("Esa mesa ya fue cerrada");S.addTo=null;render();return}
+  if(!o||!canAddRound(o)){toast("Ese pedido ya fue cerrado o cancelado");S.addTo=null;render();return}
   if(!S.cart.length)return;
   const r=maxRound(o)+1;
   const items=[...o.items.map(i=>({...i,r:i.r||1})),...S.cart.map(l=>({n:l.n,p:l.p,q:l.q,nota:l.nota.trim(),r}))];
@@ -623,16 +646,18 @@ function renderCarta(){
     const its=c.items.filter(i=>!q||i.n.toLowerCase().includes(q)||i.d.toLowerCase().includes(q));
     if(!its.length)return"";
     return`<div class="cathead">${esc(c.t)}${c.note?` <span>· ${esc(c.note)}</span>`:""}</div>
-    <div class="grid">${its.map(i=>{const k=qty(i.n);return`<button class="item${k?" on":""}" data-c="${c.id}" data-n="${esc(i.n)}">
-      ${k?`<span class="q num">${k}</span>`:""}<span><span class="n">${esc(i.n)}</span>${i.d?`<br><span class="d">${esc(i.d)}</span>`:""}</span>
+    <div class="grid">${its.map(i=>{const k=qty(i.n),off=S.agotados.has(i.n);return`<button class="item${k?" on":""}${off?" off":""}${S.dispEdit?" edit":""}" data-c="${c.id}" data-n="${esc(i.n)}" ${off&&!S.dispEdit?'aria-disabled="true"':""}>
+      ${k?`<span class="q num">${k}</span>`:""}${off?`<span class="ag">Agotado</span>`:""}<span><span class="n">${esc(i.n)}</span>${i.d?`<br><span class="d">${esc(i.d)}</span>`:""}</span>
       <span class="p num">${money(i.p)}</span></button>`}).join("")}</div>`}).join("")||`<div class="empty">Nada coincide con “${esc(S.q)}”.</div>`;
   const at=S.addTo&&S.orders.find(x=>x.id===S.addTo);
-  const top=at&&isOpenMesa(at)
+  const top=at&&canAddRound(at)
     ?`<div class="banner" style="margin-top:10px"><span>Agregando a <b>${esc(mesaLabel(at))}</b> · pedido #${at.numero} · ronda ${maxRound(at)+1}</span><button data-noadd="1">Cancelar</button></div>`
-    :openMesas().length?`<div class="cats mesas" style="margin-top:10px"><span class="lbl">Agregar a mesa:</span>${openMesas().map(o=>`<button data-addto="${o.id}">+ ${esc(mesaLabel(o))} · #${o.numero}</button>`).join("")}</div>`:"";
+    :openMesas().length?`<div class="cats mesas" style="margin-top:10px"><span class="lbl">Agregar a mesa:</span>${openMesas().map(o=>`<button data-addto="${o.id}">+ ${esc(mesaLabel(o))}${/#\d/.test(mesaLabel(o))?"":" · #"+o.numero}</button>`).join("")}</div>`:"";
   return`${top}<div class="stick">
     <div class="cats">${[{id:"all",t:"Todo"},...MENU].map(c=>`<button data-cat="${c.id}" aria-pressed="${S.cat===c.id}">${esc(c.t)}</button>`).join("")}</div>
     <input class="search" id="q" type="search" placeholder="Buscar: mango, oreo, bestia…" value="${esc(S.q)}" autocomplete="off">
+    ${canEditDisp()?`<div class="dispbar"><span>${S.dispEdit?"Toca un producto para marcarlo agotado o disponible":S.agotados.size?`${S.agotados.size} agotado${S.agotados.size===1?"":"s"} hoy`:"Todo disponible"}</span>
+      <span style="display:flex;gap:6px">${S.dispEdit&&S.agotados.size?`<button data-dispreset="1">Todo disponible</button>`:""}<button data-dispedit="1" class="${S.dispEdit?"on":""}">${S.dispEdit?"Listo":"Disponibilidad"}</button></span></div>`:""}
   </div>${menuHtml}`;
 }
 
@@ -658,10 +683,10 @@ function cartLines(){return S.cart.map((l,i)=>`<div class="line">
     </div>`).join("")}
 function mesaChips(label){
   const om=openMesas();if(!om.length)return"";
-  return`<div class="cats mesas">${label?`<span class="lbl">${label}</span>`:""}${om.map(o=>`<button data-addto="${o.id}">${esc(mesaLabel(o))} · #${o.numero}</button>`).join("")}</div>`;
+  return`<div class="cats mesas">${label?`<span class="lbl">${label}</span>`:""}${om.map(o=>`<button data-addto="${o.id}">${esc(mesaLabel(o))}${/#\d/.test(mesaLabel(o))?"":" · #"+o.numero}</button>`).join("")}</div>`;
 }
 function renderPedido(){
-  if(S.addTo){const o=S.orders.find(x=>x.id===S.addTo);if(o&&isOpenMesa(o))return renderAddTo(o);S.addTo=null}
+  if(S.addTo){const o=S.orders.find(x=>x.id===S.addTo);if(o&&canAddRound(o))return renderAddTo(o);S.addTo=null}
   const f=S.form,total=orderTotal(),adel=parseFloat(f.adelanto)||0;
   const match=!S.editing&&f.tipo==="En local"&&mesaKey(f.detalle)?openMesas().find(o=>mesaKey(o.detalle)===mesaKey(f.detalle)):null;
   const title=S.editing?`Editando #${S.orders.find(o=>o.id===S.editing)?.numero??""} <span class="edit">edición</span>`:`Pedido #${nextNumber()}`;
@@ -773,15 +798,15 @@ function orderCard(o){
    ${S.confirmDel===o.id?`<div class="confirm">¿Borrar el pedido #${o.numero}? <button class="y" data-del-yes="${o.id}">Sí, borrar</button><button class="n" data-del-no>No</button></div>`:""}
    <div class="acts">${S.cocina?`
     ${nx?`<button class="adv" data-adv="${o.id}">Pasar a ${ESTADOS.find(x=>x.k===nx).t} →</button>`:""}
-    ${isOpenMesa(o)?`<button data-addto="${o.id}">+ Agregar</button>`:""}
+    ${canAddRound(o)?`<button data-addto="${o.id}">+ Pedir algo más</button>`:""}
     ${saldo>0.001&&o.estado!=="cancelado"?`<button data-pay="${o.id}">Cobrar</button>`:""}
     <a class="wa" href="${waHref(o)}" target="_blank" rel="noopener">WhatsApp</a>`:!S.owner?`
     ${o.estado==="listo"?`<button class="adv" data-adv="${o.id}">Entregado en mesa ✓</button>`:`<span class="meta" style="grid-column:1/-1;text-align:center">${o.estado==="entregado"?"Entregado ✓"+(isOpenMesa(o)?" · mesa abierta":""):"En cocina · aún no está listo"}</span>`}
-    ${isOpenMesa(o)?`<button data-addto="${o.id}">+ Agregar</button>`:""}
+    ${canAddRound(o)?`<button data-addto="${o.id}">+ Pedir algo más</button>`:""}
     ${saldo>0.001&&o.estado!=="cancelado"?`<button data-pay="${o.id}">Cobrar</button>`:""}
     <a class="wa" href="${waHref(o)}" target="_blank" rel="noopener">WhatsApp</a>`:`
     ${nx?`<button class="adv" data-adv="${o.id}">Pasar a ${ESTADOS.find(x=>x.k===nx).t} →</button>`:""}
-    ${isOpenMesa(o)?`<button data-addto="${o.id}">+ Agregar</button>`:""}
+    ${canAddRound(o)?`<button data-addto="${o.id}">+ Pedir algo más</button>`:""}
     ${saldo>0.001&&o.estado!=="cancelado"?`<button data-pay="${o.id}">Cobrar</button>`:isOpenMesa(o)?`<button data-close="${o.id}">Cerrar mesa</button>`:""}
     <a class="wa" href="${waHref(o)}" target="_blank" rel="noopener">WhatsApp</a>
     <button data-edit="${o.id}">Editar</button>
@@ -833,6 +858,10 @@ $("#app").addEventListener("click",e=>{
   const d=b.dataset;
   if(d.goto){setView(d.goto);return}
   if(d.cat){S.cat=d.cat;render();$("#app").scrollTop=0;return}
+  if(d.dispedit&&canEditDisp()){S.dispEdit=!S.dispEdit;render();return}
+  if(d.dispreset&&canEditDisp()){S.agotados=new Set();render();fdb.collection("config").doc("disponibilidad").set({agotados:[],updatedAt:Date.now(),por:S.session?.nombre||""}).then(()=>toast("Todo disponible")).catch(e=>toast(fbErr(e)));return}
+  if(b.classList.contains("item")&&S.dispEdit&&canEditDisp()){toggleAgotado(d.n);return}
+  if(b.classList.contains("item")&&S.agotados.has(d.n)){toast("Agotado hoy");return}
   if(b.classList.contains("item")){
     const it=MENU.find(c=>c.id===d.c).items.find(i=>i.n===d.n);
     it.o?openPicker(it):addItem(it);return}
@@ -888,7 +917,7 @@ render();
 S.gateMode="loading";renderGate();
 boot();setInterval(()=>{if(S.view==="pedidos")render()},60000);
 /* aviso de nueva versión */
-const APP_VERSION="2026-09-23d";
+const APP_VERSION="2026-09-24c";
 async function checkVersion(){
   try{const t=await fetch(location.pathname+"?nc="+Date.now(),{cache:"no-store"}).then(r=>r.text());
     const m=t.match(/APP_VERSION="([^"]+)"/);
