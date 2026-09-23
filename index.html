@@ -517,7 +517,7 @@ async function addRound(){
   const btn=$("#send");if(btn)btn.disabled=true;
   try{
     await S.col.doc(o.id).update(patch);
-  }catch(e){toast("No se pudo agregar, intenta otra vez");if(btn)btn.disabled=false;return}
+  }catch(e){console.error(e);toast(fbErr(e));if(btn)btn.disabled=false;return}
   toast(`Ronda ${r} agregada a ${mesaLabel(o)}`);
   S.cart=[];S.addTo=null;S.form=blankForm();setView("carta");
 }
@@ -585,7 +585,11 @@ function renderCarta(){
     <div class="grid">${its.map(i=>{const k=qty(i.n);return`<button class="item${k?" on":""}" data-c="${c.id}" data-n="${esc(i.n)}">
       ${k?`<span class="q num">${k}</span>`:""}<span><span class="n">${esc(i.n)}</span>${i.d?`<br><span class="d">${esc(i.d)}</span>`:""}</span>
       <span class="p num">${money(i.p)}</span></button>`}).join("")}</div>`}).join("")||`<div class="empty">Nada coincide con “${esc(S.q)}”.</div>`;
-  return`<div class="stick">
+  const at=S.addTo&&S.orders.find(x=>x.id===S.addTo);
+  const top=at&&isOpenMesa(at)
+    ?`<div class="banner" style="margin-top:10px"><span>Agregando a <b>${esc(mesaLabel(at))}</b> · pedido #${at.numero} · ronda ${maxRound(at)+1}</span><button data-noadd="1">Cancelar</button></div>`
+    :openMesas().length?`<div class="cats mesas" style="margin-top:10px"><span class="lbl">Agregar a mesa:</span>${openMesas().map(o=>`<button data-addto="${o.id}">+ ${esc(mesaLabel(o))} · #${o.numero}</button>`).join("")}</div>`:"";
+  return`${top}<div class="stick">
     <div class="cats">${[{id:"all",t:"Todo"},...MENU].map(c=>`<button data-cat="${c.id}" aria-pressed="${S.cat===c.id}">${esc(c.t)}</button>`).join("")}</div>
     <input class="search" id="q" type="search" placeholder="Buscar: mango, oreo, bestia…" value="${esc(S.q)}" autocomplete="off">
   </div>${menuHtml}`;
@@ -711,6 +715,7 @@ function orderCard(o){
    ${S.confirmDel===o.id?`<div class="confirm">¿Borrar el pedido #${o.numero}? <button class="y" data-del-yes="${o.id}">Sí, borrar</button><button class="n" data-del-no>No</button></div>`:""}
    <div class="acts">${S.cocina?`
     ${nx?`<button class="adv" data-adv="${o.id}">Pasar a ${ESTADOS.find(x=>x.k===nx).t} →</button>`:""}
+    ${isOpenMesa(o)?`<button data-addto="${o.id}">+ Agregar</button>`:""}
     <a class="wa" href="${waHref(o)}" target="_blank" rel="noopener">WhatsApp</a>`:!S.owner?`
     ${o.estado==="listo"?`<button class="adv" data-adv="${o.id}">Entregado en mesa ✓</button>`:`<span class="meta" style="grid-column:1/-1;text-align:center">En cocina · aún no está listo</span>`}
     ${isOpenMesa(o)?`<button data-addto="${o.id}">+ Agregar</button>`:""}
@@ -779,7 +784,7 @@ $("#app").addEventListener("click",e=>{
   if(d.acctYes&&S.owner){S.confirmDel=null;setActive(d.acctYes,false).then(()=>{toast("Usuario desactivado");loadAccounts()}).catch(e=>toast(fbErr(e)));return}
   if(d.acctOn&&S.owner){setActive(d.acctOn,true).then(()=>{toast("Usuario reactivado");loadAccounts()}).catch(e=>toast(fbErr(e)));return}
   if(b.id==="send"){submitOrder();return}
-  if(b.id==="noadd"){S.addTo=null;render();return}
+  if(b.id==="noadd"||d.noadd){S.addTo=null;render();return}
   if(b.id==="clear"){S.addTo=null;S.cart=[];S.form=blankForm();S.editing=null;render();return}
   if(b.id==="xls"){exportExcel(filtered());return}
   if(!S.owner&&(d.pay||d.edit||d.cancel||d.reopen||d.del||d.delYes||b.id==="xls"))return;
@@ -822,6 +827,17 @@ $("#app").addEventListener("change",e=>{
 render();
 S.gateMode="loading";renderGate();
 boot();setInterval(()=>{if(S.view==="pedidos")render()},60000);
+/* aviso de nueva versión */
+const APP_VERSION="2026-09-23a";
+async function checkVersion(){
+  try{const t=await fetch(location.pathname+"?nc="+Date.now(),{cache:"no-store"}).then(r=>r.text());
+    const m=t.match(/APP_VERSION="([^"]+)"/);
+    if(m&&m[1]!==APP_VERSION&&!document.getElementById("upd")){
+      const d=document.createElement("button");d.id="upd";d.className="toast";d.style.cssText="top:auto;bottom:130px;border:0;cursor:pointer";
+      d.textContent="Hay una nueva versión · toca para actualizar";d.onclick=()=>location.reload();$("#phone").appendChild(d);}
+  }catch(e){}
+}
+setInterval(checkVersion,5*60e3);document.addEventListener("visibilitychange",()=>{if(!document.hidden)checkVersion()});
 </script>
 </body>
 </html>
