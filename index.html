@@ -537,16 +537,16 @@ function openCobro(id){
     const v=parseFloat(pc)>0?r2(parseFloat(pc)-saldo):null;
     const efectivo=met==="Efectivo";
     m.innerHTML=`<div class="modal" id="mbg"><div class="sheet" role="dialog" aria-modal="true" aria-label="Cobrar">
-      <h3>${S.owner?"Cobrar":"Calcular vuelto"} · #${o.numero}${o.tipo==="En local"&&o.detalle?" · "+esc(mesaLabel(o)):""}</h3>
+      <h3>Cobrar · #${o.numero}${o.tipo==="En local"&&o.detalle?" · "+esc(mesaLabel(o)):""}</h3>
       <p>${o.pagado>0?`Total ${money(o.total)} · ya pagó ${money(o.pagado)}`:"Total del pedido"}</p>
       <div class="total" style="margin:0 0 12px"><span>A cobrar</span><strong class="num">${money(saldo)}</strong></div>
-      ${S.owner?`<div class="seg" style="margin-bottom:12px;flex-wrap:wrap" id="c-met">${METODOS.map(x=>`<button data-m="${x}" aria-pressed="${met===x}">${x}</button>`).join("")}</div>`:""}
+      ${`<div class="seg" style="margin-bottom:12px;flex-wrap:wrap" id="c-met">${METODOS.map(x=>`<button data-m="${x}" aria-pressed="${met===x}">${x}</button>`).join("")}</div>`}
       ${efectivo?`<label class="f" style="margin-bottom:8px"><span>Paga con (S/)</span><input id="c-pc" inputmode="decimal" value="${esc(pc)}" placeholder="Monto que entrega el cliente"></label>
       <div class="chips" style="margin-bottom:10px"><button data-b="${saldo}">Exacto</button>${bills.map(b=>`<button data-b="${b}">S/ ${b}</button>`).join("")}</div>
       <div class="total" style="margin:0 0 14px;border-top:1px dashed var(--line)"><span>Vuelto</span><strong class="num" id="c-v" style="color:${v!=null&&v<0?"var(--red)":"var(--green)"}">${v==null?"—":v<0?"Faltan "+money(-v):money(v)}</strong></div>`:""}
-      <div class="row"><button class="btn ghost" id="c-close">${S.owner?"Cancelar":"Listo"}</button>
-      ${S.owner?`<button class="btn primary" id="c-ok" ${efectivo&&v!=null&&v<0?"disabled":""}>Registrar cobro${isOpenMesa(o)?" y cerrar":""}</button>`:""}</div>
-      ${S.owner?"":`<div class="note">El propietario registra el cobro en el sistema.</div>`}
+      <div class="row"><button class="btn ghost" id="c-close">Cancelar</button>
+      <button class="btn primary" id="c-ok" ${efectivo&&v!=null&&v<0?"disabled":""}>Registrar cobro${isOpenMesa(o)?" y cerrar":""}</button></div>
+      
     </div></div>`;
     $("#c-close").onclick=()=>m.innerHTML="";
     $("#mbg").onclick=e=>{if(e.target.id==="mbg")m.innerHTML=""};
@@ -556,7 +556,7 @@ function openCobro(id){
     const ok=$("#c-ok");if(ok)ok.onclick=async()=>{
       const pcv=met==="Efectivo"&&parseFloat(pc)>0?r2(parseFloat(pc)):0;
       m.innerHTML="";
-      await patchOrder(o.id,{pagado:o.total,pago:"Pagado",metodo:met,pagaCon:pcv,vuelto:pcv?Math.max(r2(pcv-saldo),0):0,cerrada:o.tipo==="En local"?true:!!o.cerrada,updatedAt:Date.now()});
+      await patchOrder(o.id,{pagado:o.total,pago:"Pagado",metodo:met,pagaCon:pcv,vuelto:pcv?Math.max(r2(pcv-saldo),0):0,cerrada:o.tipo==="En local"?true:!!o.cerrada,updatedAt:Date.now(),cobradoPor:S.session?.nombre||"",cobradoUid:S.session?.id||"",cobradoAt:Date.now()});
       toast(`Cobrado #${o.numero}${pcv?" · vuelto "+money(Math.max(pcv-saldo,0)):""}`);
     };
   };draw();
@@ -592,12 +592,12 @@ async function exportExcel(list){
     "N°":o.numero,"Fecha":new Date(o.createdAt).toLocaleDateString("es-PE"),"Hora":hhmm(o.createdAt),
     "Cliente":o.cliente||"","Teléfono":o.telefono||"","Tipo":o.tipo,"Mesa/Dirección":o.detalle||"",
     "Productos":o.items.map(i=>`${i.q}x ${i.n}`).join("; "),"Subtotal (S/)":o.subtotal??(o.total-(o.delivery||0)),"Delivery (S/)":o.delivery||0,"Total (S/)":o.total,
-    "Método":o.metodo,"Paga con (S/)":o.pagaCon||"","Vuelto (S/)":o.pagaCon?(o.vuelto||0):"","Pago":o.pago,"Pagado (S/)":o.pagado||0,"Saldo (S/)":Math.round((o.total-(o.pagado||0))*100)/100,
+    "Método":o.metodo,"Cobró":o.cobradoPor||"","Paga con (S/)":o.pagaCon||"","Vuelto (S/)":o.pagaCon?(o.vuelto||0):"","Pago":o.pago,"Pagado (S/)":o.pagado||0,"Saldo (S/)":Math.round((o.total-(o.pagado||0))*100)/100,
     "Estado":ESTADOS.find(e=>e.k===o.estado)?.t||o.estado,"Notas":o.notas||""}));
   const det=[];list.forEach(o=>o.items.forEach(i=>det.push({"N°":o.numero,"Fecha":new Date(o.createdAt).toLocaleDateString("es-PE"),"Ronda":i.r||1,"Producto":i.n,"Cant.":i.q,"P. unit (S/)":i.p,"Subtotal (S/)":i.p*i.q,"Nota":i.nota||"","Estado":o.estado})));
   const agg={};list.filter(o=>o.estado!=="cancelado").forEach(o=>o.items.forEach(i=>{agg[i.n]=agg[i.n]||{"Producto":i.n,"Unidades":0,"Venta (S/)":0};agg[i.n].Unidades+=i.q;agg[i.n]["Venta (S/)"]+=i.p*i.q}));
   const wb=XLSX.utils.book_new();
-  const ws1=XLSX.utils.json_to_sheet(rows);ws1["!cols"]=[{wch:5},{wch:11},{wch:7},{wch:18},{wch:12},{wch:11},{wch:18},{wch:50},{wch:11},{wch:11},{wch:10},{wch:12},{wch:10},{wch:10},{wch:10},{wch:11},{wch:10},{wch:11},{wch:25}];
+  const ws1=XLSX.utils.json_to_sheet(rows);ws1["!cols"]=[{wch:5},{wch:11},{wch:7},{wch:18},{wch:12},{wch:11},{wch:18},{wch:50},{wch:11},{wch:11},{wch:10},{wch:12},{wch:12},{wch:10},{wch:10},{wch:10},{wch:11},{wch:10},{wch:11},{wch:25}];
   XLSX.utils.book_append_sheet(wb,ws1,"Pedidos");
   const ws2=XLSX.utils.json_to_sheet(det);ws2["!cols"]=[{wch:5},{wch:11},{wch:6},{wch:40},{wch:6},{wch:11},{wch:12},{wch:25},{wch:11}];
   XLSX.utils.book_append_sheet(wb,ws2,"Detalle");
@@ -678,7 +678,7 @@ function renderPedido(){
       ${match?`<div class="banner"><span>${esc(mesaLabel(match))} ya tiene el pedido #${match.numero} abierto.</span><button data-addto="${match.id}">Agregar a ese pedido</button></div>`:""}
       <label class="f"><span>Método de pago</span><select id="f-metodo" data-f="metodo">${METODOS.map(m=>`<option ${f.metodo===m?"selected":""}>${m}</option>`).join("")}</select></label>
       <label class="f"><span>Pago</span><select id="f-pago" data-f="pago">${["Pendiente","Adelanto","Pagado"].map(m=>`<option ${f.pago===m?"selected":""}>${m}</option>`).join("")}</select></label>
-      ${f.metodo==="Efectivo"?`<label class="f"><span>Paga con (S/)</span><input id="f-pagacon" data-f="pagaCon" inputmode="decimal" value="${esc(f.pagaCon)}" placeholder="Ej. 50"></label>
+      ${f.metodo==="Efectivo"&&f.tipo!=="En local"?`<label class="f"><span>Paga con (S/)</span><input id="f-pagacon" data-f="pagaCon" inputmode="decimal" value="${esc(f.pagaCon)}" placeholder="Ej. 50"></label>
       <div class="f" style="justify-content:flex-end"><span style="font-size:12px;font-weight:800;color:var(--muted)">${f.tipo==="Delivery"&&f.pago==="Pendiente"?"Llevar de vuelto":"Vuelto"}</span><b id="vuelto-val" class="num" style="font-size:18px;padding:8px 0">${vueltoTxt(formVuelto())||"—"}</b></div>`:""}
       ${f.pago==="Adelanto"?`<label class="f full"><span>Monto del adelanto (S/)</span><input id="f-adelanto" data-f="adelanto" inputmode="decimal" value="${esc(f.adelanto)}" placeholder="0.00"></label>`:""}
       <label class="f full"><span>Notas del pedido</span><textarea id="f-notas" data-f="notas" rows="2">${esc(f.notas)}</textarea></label>
@@ -768,20 +768,21 @@ function orderCard(o){
    ${o.notas?`<div class="meta">Nota: ${esc(o.notas)}</div>`:""}
    ${o.delivery?`<div class="meta num" style="display:flex;justify-content:space-between"><span>Delivery</span><span>${money(o.delivery)}</span></div>`:""}
    <div class="tot"><span class="num">${money(o.total)}</span>${pt}</div>
+   ${o.cobradoPor?`<div class="meta">Cobró ${esc(o.cobradoPor.split(" ")[0])} · ${hhmm(o.cobradoAt)}</div>`:""}
    ${o.pagaCon?`<div class="meta num" style="display:flex;justify-content:space-between"><span>Paga con ${money(o.pagaCon)}</span><b style="color:var(--ink)">Vuelto ${money(saldo>0.001?Math.max(r2(o.pagaCon-saldo),0):(o.vuelto||0))}</b></div>`:""}
    ${S.confirmDel===o.id?`<div class="confirm">¿Borrar el pedido #${o.numero}? <button class="y" data-del-yes="${o.id}">Sí, borrar</button><button class="n" data-del-no>No</button></div>`:""}
    <div class="acts">${S.cocina?`
     ${nx?`<button class="adv" data-adv="${o.id}">Pasar a ${ESTADOS.find(x=>x.k===nx).t} →</button>`:""}
     ${isOpenMesa(o)?`<button data-addto="${o.id}">+ Agregar</button>`:""}
-    ${saldo>0.001&&o.estado!=="cancelado"?`<button data-pay="${o.id}">Vuelto</button>`:""}
+    ${saldo>0.001&&o.estado!=="cancelado"?`<button data-pay="${o.id}">Cobrar</button>`:""}
     <a class="wa" href="${waHref(o)}" target="_blank" rel="noopener">WhatsApp</a>`:!S.owner?`
     ${o.estado==="listo"?`<button class="adv" data-adv="${o.id}">Entregado en mesa ✓</button>`:`<span class="meta" style="grid-column:1/-1;text-align:center">${o.estado==="entregado"?"Entregado ✓"+(isOpenMesa(o)?" · mesa abierta":""):"En cocina · aún no está listo"}</span>`}
     ${isOpenMesa(o)?`<button data-addto="${o.id}">+ Agregar</button>`:""}
-    ${saldo>0.001&&o.estado!=="cancelado"?`<button data-pay="${o.id}">Vuelto</button>`:""}
+    ${saldo>0.001&&o.estado!=="cancelado"?`<button data-pay="${o.id}">Cobrar</button>`:""}
     <a class="wa" href="${waHref(o)}" target="_blank" rel="noopener">WhatsApp</a>`:`
     ${nx?`<button class="adv" data-adv="${o.id}">Pasar a ${ESTADOS.find(x=>x.k===nx).t} →</button>`:""}
     ${isOpenMesa(o)?`<button data-addto="${o.id}">+ Agregar</button>`:""}
-    ${saldo>0.001&&o.estado!=="cancelado"?`<button data-pay="${o.id}">Cobrar / vuelto</button>`:isOpenMesa(o)?`<button data-close="${o.id}">Cerrar mesa</button>`:""}
+    ${saldo>0.001&&o.estado!=="cancelado"?`<button data-pay="${o.id}">Cobrar</button>`:isOpenMesa(o)?`<button data-close="${o.id}">Cerrar mesa</button>`:""}
     <a class="wa" href="${waHref(o)}" target="_blank" rel="noopener">WhatsApp</a>
     <button data-edit="${o.id}">Editar</button>
     ${o.estado==="cancelado"?`<button data-reopen="${o.id}">Reabrir</button>`:o.estado!=="entregado"?`<button class="danger" data-cancel="${o.id}">Cancelar</button>`:""}
@@ -887,7 +888,7 @@ render();
 S.gateMode="loading";renderGate();
 boot();setInterval(()=>{if(S.view==="pedidos")render()},60000);
 /* aviso de nueva versión */
-const APP_VERSION="2026-09-23c";
+const APP_VERSION="2026-09-23d";
 async function checkVersion(){
   try{const t=await fetch(location.pathname+"?nc="+Date.now(),{cache:"no-store"}).then(r=>r.text());
     const m=t.match(/APP_VERSION="([^"]+)"/);
