@@ -82,6 +82,12 @@ nav.bottom .badge[hidden]{display:none}
 .item.off .p{color:var(--muted);text-decoration:line-through}
 .item .ag{position:absolute;bottom:10px;right:10px;font-size:10px;font-weight:800;letter-spacing:.05em;text-transform:uppercase;background:var(--red-bg);color:var(--red);border-radius:999px;padding:2px 7px}
 .item.edit{border-style:dashed}
+.xtag{display:inline-block;font-size:10px;font-weight:800;letter-spacing:.05em;text-transform:uppercase;background:var(--amber-bg);color:var(--amber);border-radius:999px;padding:1px 6px;vertical-align:middle}
+.xbox{background:var(--surface);border:1px dashed var(--line);border-radius:12px;padding:10px 12px;margin:-4px 0 14px}
+.xhead{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:8px;font-size:14px}
+.xhead span{font-size:12px;color:var(--muted);font-weight:700}
+.xbox .row .btn{padding:9px 8px;font-size:13px}
+.xsum{font-size:13px;font-weight:800;margin-top:8px;text-align:right}
 .dispbar{display:flex;gap:8px;align-items:center;justify-content:space-between;margin-top:8px;font-size:13px;font-weight:700}
 .dispbar button{border:1.5px solid var(--ink);background:transparent;border-radius:999px;padding:6px 12px;font-weight:800;font-size:12px}
 .dispbar button.on{background:var(--ink);color:var(--bg)}
@@ -507,7 +513,7 @@ async function submitOrder(){
     createdAt:base?base.createdAt:Date.now(),updatedAt:Date.now(),
     estado:base?base.estado:"pendiente",
     cliente:f.cliente.trim(),telefono:f.telefono.replace(/[^\d+]/g,""),tipo:f.tipo,detalle:f.detalle.trim(),
-    items:S.cart.map(l=>({n:l.n,p:l.p,q:l.q,nota:l.nota.trim(),r:l.r||(base?maxRound(base):1)})),subtotal,delivery,total,rondas:base?(base.rondas||[]):[],cerrada:base?!!base.cerrada:false,
+    items:S.cart.map(l=>({n:l.n,p:l.p,q:l.q,nota:l.nota.trim(),r:l.r||(base?maxRound(base):1),...(l.x?{x:true}:{})})),subtotal,delivery,total,rondas:base?(base.rondas||[]):[],cerrada:base?!!base.cerrada:false,
     metodo:f.metodo,pago:f.pago,pagado:adel,notas:f.notas.trim(),pagaCon:f.metodo==="Efectivo"&&parseFloat(f.pagaCon)>0?r2(parseFloat(f.pagaCon)):0,vuelto:f.metodo==="Efectivo"&&parseFloat(f.pagaCon)>0?Math.max(r2(parseFloat(f.pagaCon)-(f.pago==="Adelanto"?adel:total)),0):0
   };
   const btn=$("#send");if(btn)btn.disabled=true;
@@ -535,7 +541,7 @@ async function addRound(){
   if(!o||!canAddRound(o)){toast("Ese pedido ya fue cerrado o cancelado");S.addTo=null;render();return}
   if(!S.cart.length)return;
   const r=maxRound(o)+1;
-  const items=[...o.items.map(i=>({...i,r:i.r||1})),...S.cart.map(l=>({n:l.n,p:l.p,q:l.q,nota:l.nota.trim(),r}))];
+  const items=[...o.items.map(i=>({...i,r:i.r||1})),...S.cart.map(l=>({n:l.n,p:l.p,q:l.q,nota:l.nota.trim(),r,...(l.x?{x:true}:{})}))];
   const total=items.reduce((a,i)=>a+i.p*i.q,0)+(o.delivery||0),pag=o.pagado||0;
   const patch={items,total,updatedAt:Date.now(),
     estado:["listo","entregado"].includes(o.estado)?"pendiente":o.estado,
@@ -590,7 +596,7 @@ function waText(o){
   const L=[`*la tiendita dulce* 🍓`,`Pedido *#${o.numero}* · ${new Date(o.createdAt).toLocaleDateString("es-PE")} ${hhmm(o.createdAt)}`];
   if(o.cliente)L.push(`Cliente: ${o.cliente}`);
   L.push(`${o.tipo}${o.detalle?": "+o.detalle:""}`,"");
-  o.items.forEach(i=>L.push(`• ${i.q} x ${i.n} — ${money(i.p*i.q)}${i.nota?`\n   _${i.nota}_`:""}`));
+  o.items.forEach(i=>L.push(`• ${i.q} x ${i.n}${i.x?" (adicional)":""} — ${money(i.p*i.q)}${i.nota?`\n   _${i.nota}_`:""}`));
   if(o.delivery)L.push(`Delivery: ${money(o.delivery)}`);
   L.push("",`*Total: ${money(o.total)}*`);
   if(o.pago==="Pagado")L.push(`Pagado (${o.metodo}) ✅`);
@@ -617,7 +623,7 @@ async function exportExcel(list){
     "Productos":o.items.map(i=>`${i.q}x ${i.n}`).join("; "),"Subtotal (S/)":o.subtotal??(o.total-(o.delivery||0)),"Delivery (S/)":o.delivery||0,"Total (S/)":o.total,
     "Método":o.metodo,"Cobró":o.cobradoPor||"","Paga con (S/)":o.pagaCon||"","Vuelto (S/)":o.pagaCon?(o.vuelto||0):"","Pago":o.pago,"Pagado (S/)":o.pagado||0,"Saldo (S/)":Math.round((o.total-(o.pagado||0))*100)/100,
     "Estado":ESTADOS.find(e=>e.k===o.estado)?.t||o.estado,"Notas":o.notas||""}));
-  const det=[];list.forEach(o=>o.items.forEach(i=>det.push({"N°":o.numero,"Fecha":new Date(o.createdAt).toLocaleDateString("es-PE"),"Ronda":i.r||1,"Producto":i.n,"Cant.":i.q,"P. unit (S/)":i.p,"Subtotal (S/)":i.p*i.q,"Nota":i.nota||"","Estado":o.estado})));
+  const det=[];list.forEach(o=>o.items.forEach(i=>det.push({"N°":o.numero,"Fecha":new Date(o.createdAt).toLocaleDateString("es-PE"),"Ronda":i.r||1,"Producto":i.n,"Adicional":i.x?"Sí":"","Cant.":i.q,"P. unit (S/)":i.p,"Subtotal (S/)":i.p*i.q,"Nota":i.nota||"","Estado":o.estado})));
   const agg={};list.filter(o=>o.estado!=="cancelado").forEach(o=>o.items.forEach(i=>{agg[i.n]=agg[i.n]||{"Producto":i.n,"Unidades":0,"Venta (S/)":0};agg[i.n].Unidades+=i.q;agg[i.n]["Venta (S/)"]+=i.p*i.q}));
   const wb=XLSX.utils.book_new();
   const ws1=XLSX.utils.json_to_sheet(rows);ws1["!cols"]=[{wch:5},{wch:11},{wch:7},{wch:18},{wch:12},{wch:11},{wch:18},{wch:50},{wch:11},{wch:11},{wch:10},{wch:12},{wch:12},{wch:10},{wch:10},{wch:10},{wch:11},{wch:10},{wch:11},{wch:25}];
@@ -667,6 +673,7 @@ function renderAddTo(o){
    <div class="prev"><b>Ya pidieron · pedido #${o.numero}</b>${o.items.map(i=>`${i.q}× ${esc(i.n)}`).join(" · ")}</div>
    <div class="lines">${S.cart.length?cartLines():`<div class="empty">Elige en la carta lo que se agrega a la mesa.</div>`}</div>
    <button class="addmore" data-goto="carta">+ Agregar productos de la carta</button>
+   ${extrasBlock()}
    <div class="checkout">
     <div class="sub"><span>Consumo anterior</span><span class="num">${money(o.total)}</span></div>
     <div class="sub"><span>Esta ronda</span><span class="num">${money(total)}</span></div>
@@ -675,8 +682,46 @@ function renderAddTo(o){
     <button class="btn ghost" id="noadd">Hacer un pedido nuevo aparte</button>
    </div>`;
 }
+function extrasBlock(){
+  const xs=S.cart.filter(l=>l.x);
+  return`<div class="xbox"><div class="xhead"><b>Tarrinas y adicionales</b><span>costo aparte</span></div>
+    <div class="row"><button class="btn ghost" data-extra="tarrina" style="margin:0">+ Tarrina</button><button class="btn ghost" data-extra="otro" style="margin:0">+ Otro adicional</button></div>
+    ${xs.length?`<div class="xsum num">Adicionales: ${money(xs.reduce((a,l)=>a+l.p*l.q,0))}</div>`:""}</div>`;
+}
+function lastPrice(k){try{return localStorage.getItem("td_precio_"+k)||""}catch(e){return""}}
+function savePrice(k,v){try{localStorage.setItem("td_precio_"+k,v)}catch(e){}}
+function openExtra(kind){
+  const m=$("#modal");let q=1;
+  const draw=(desc,precio)=>{
+    m.innerHTML=`<div class="modal" id="mbg"><div class="sheet" role="dialog" aria-modal="true" aria-label="Adicional">
+      <h3>${kind==="tarrina"?"Tarrina":"Otro adicional"}</h3><p>Se suma al pedido con su costo detallado.</p>
+      <div class="fields">
+        <label class="f full"><span>Descripción</span><input id="x-desc" value="${esc(desc)}" placeholder="${kind==="tarrina"?"Tarrina":"Ej. porción extra de papas, topping, cubiertos"}" maxlength="50"></label>
+        <label class="f"><span>Precio c/u (S/)</span><input id="x-precio" inputmode="decimal" value="${esc(precio)}" placeholder="0.00"></label>
+        <div class="f"><span>Cantidad</span><div class="stepper" style="padding-top:4px"><button type="button" id="x-dec">−</button><b class="num" id="x-q">${q}</b><button type="button" id="x-inc">+</button></div></div>
+      </div>
+      <div class="total" style="margin:12px 0"><span>Costo</span><strong class="num" id="x-tot">${money((parseFloat(precio)||0)*q)}</strong></div>
+      <div class="row"><button class="btn ghost" id="x-cancel">Cancelar</button><button class="btn primary" id="x-ok">Agregar</button></div></div></div>`;
+    const upd=()=>{$("#x-q").textContent=q;$("#x-tot").textContent=money((parseFloat($("#x-precio").value)||0)*q)};
+    $("#x-dec").onclick=()=>{if(q>1)q--;upd()};$("#x-inc").onclick=()=>{q++;upd()};
+    $("#x-precio").oninput=upd;
+    $("#x-cancel").onclick=()=>m.innerHTML="";
+    $("#mbg").onclick=e=>{if(e.target.id==="mbg")m.innerHTML=""};
+    $("#x-ok").onclick=()=>{
+      const d=$("#x-desc").value.trim()||(kind==="tarrina"?"Tarrina":""),pr=Math.round((parseFloat($("#x-precio").value)||0)*100)/100;
+      if(!d){toast("Escribe qué es el adicional");return}
+      if(!(pr>0)){toast("Escribe el precio");$("#x-precio").focus();return}
+      savePrice(kind==="tarrina"?"tarrina":"otro",String(pr));
+      const l=S.cart.find(x=>x.x&&x.n===d&&x.p===pr);
+      if(l)l.q+=q;else S.cart.push({n:d,p:pr,q,nota:"",x:true});
+      m.innerHTML="";render();toast(`+${q} ${d}`);
+    };
+    setTimeout(()=>{const f=kind==="tarrina"?$("#x-precio"):$("#x-desc");if(f)f.focus()},50);
+  };
+  draw(kind==="tarrina"?"Tarrina":"",kind==="tarrina"?lastPrice("tarrina"):"");
+}
 function cartLines(){return S.cart.map((l,i)=>`<div class="line">
-      <span class="ln">${esc(l.n)}</span><span class="lp num">${money(l.p*l.q)}</span>
+      <span class="ln">${l.x?'<span class="xtag">adicional</span> ':""}${esc(l.n)}</span><span class="lp num">${money(l.p*l.q)}</span>
       <div class="stepper"><button data-dec="${i}" aria-label="Quitar uno">−</button><b class="num">${l.q}</b><button data-inc="${i}" aria-label="Agregar uno">+</button>
         <small class="num">${money(l.p)} c/u</small></div><span></span>
       <input id="nota-${i}" data-nota="${i}" placeholder="+ nota (sin azúcar, poco hielo…)" value="${esc(l.nota)}">
@@ -694,6 +739,7 @@ function renderPedido(){
    ${!S.editing?mesaChips("Agregar a:"):""}
    <div class="lines">${S.cart.length?cartLines():`<div class="empty">Aún no hay productos.<br>Agrégalos desde la carta.</div>`}</div>
    <button class="addmore" data-goto="carta">+ Agregar productos de la carta</button>
+   ${extrasBlock()}
    <div class="fields">
       <label class="f"><span>Cliente</span><input id="f-cliente" data-f="cliente" value="${esc(f.cliente)}" placeholder="Nombre"></label>
       <label class="f"><span>Celular</span><input id="f-telefono" data-f="telefono" inputmode="tel" value="${esc(f.telefono)}" placeholder="9XX XXX XXX"></label>
@@ -770,7 +816,7 @@ function renderPedidos(){
    <div class="orders">${list.length?list.map(orderCard).join(""):`<div class="empty">No hay pedidos en esta vista.</div>`}</div>`;
 }
 function itemsHtml(o){
-  const li=i=>`<li><span><b class="num">${i.q}×</b> ${esc(i.n)}${i.nota?`<em>${esc(i.nota)}</em>`:""}</span><span class="num">${money(i.p*i.q)}</span></li>`;
+  const li=i=>`<li><span><b class="num">${i.q}×</b> ${i.x?'<span class="xtag">adicional</span> ':""}${esc(i.n)}${i.nota?`<em>${esc(i.nota)}</em>`:""}</span><span class="num">${money(i.p*i.q)}</span></li>`;
   const mr=maxRound(o);if(mr<=1)return o.items.map(li).join("");
   let h="";for(let r=1;r<=mr;r++){
     const its=o.items.filter(i=>(i.r||1)===r);if(!its.length)continue;
@@ -857,6 +903,7 @@ $("#app").addEventListener("click",e=>{
   const b=e.target.closest("button");if(!b)return;
   const d=b.dataset;
   if(d.goto){setView(d.goto);return}
+  if(d.extra){openExtra(d.extra);return}
   if(d.cat){S.cat=d.cat;render();$("#app").scrollTop=0;return}
   if(d.dispedit&&canEditDisp()){S.dispEdit=!S.dispEdit;render();return}
   if(d.dispreset&&canEditDisp()){S.agotados=new Set();render();fdb.collection("config").doc("disponibilidad").set({agotados:[],updatedAt:Date.now(),por:S.session?.nombre||""}).then(()=>toast("Todo disponible")).catch(e=>toast(fbErr(e)));return}
@@ -917,7 +964,7 @@ render();
 S.gateMode="loading";renderGate();
 boot();setInterval(()=>{if(S.view==="pedidos")render()},60000);
 /* aviso de nueva versión */
-const APP_VERSION="2026-09-24c";
+const APP_VERSION="2026-09-24d";
 async function checkVersion(){
   try{const t=await fetch(location.pathname+"?nc="+Date.now(),{cache:"no-store"}).then(r=>r.text());
     const m=t.match(/APP_VERSION="([^"]+)"/);
