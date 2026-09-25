@@ -73,6 +73,25 @@ nav.bottom .badge[hidden]{display:none}
 .cats button[aria-pressed="true"]{background:var(--ink);color:var(--bg)}
 .search{width:100%;margin-top:6px;padding:10px 12px;border-radius:11px;border:1px solid var(--line);background:var(--surface);font-size:15px}
 .cathead{font-family:"Chewy",cursive;font-size:19px;margin:14px 0 6px;letter-spacing:.3px}
+.accs{display:flex;flex-direction:column;gap:8px;margin-top:8px}
+.acc{background:var(--surface);border:1px solid var(--line);border-radius:14px}
+.acc.open{border-color:var(--ink)}
+.acch{width:100%;display:flex;align-items:center;justify-content:space-between;gap:10px;border:0;background:transparent;padding:13px 14px;text-align:left}
+.acct-t{font-family:"Chewy","Comic Sans MS",cursive;font-size:19px;letter-spacing:.3px}
+.accm{display:flex;align-items:center;gap:8px;color:var(--muted);font-weight:800;font-size:12px}
+.accq{background:var(--pink);color:var(--pink-ink);border-radius:999px;min-width:22px;height:22px;display:grid;place-items:center;padding:0 6px;font-size:12px}
+.accm svg{width:20px;height:20px;stroke:var(--ink);fill:none;stroke-width:2.2;stroke-linecap:round;stroke-linejoin:round;transition:transform .2s}
+.acc.open .accm svg{transform:rotate(180deg)}
+.acc .grid{padding:6px 10px 12px}
+.accnote{font-size:12px;color:var(--muted);padding:0 14px 8px;margin-top:-4px}
+.acc.est .acch{padding:11px 14px}
+.acc.est .acct-t{font-family:"Nunito",system-ui,sans-serif;font-size:16px;font-weight:800;display:flex;align-items:center;gap:8px}
+.edot{width:10px;height:10px;border-radius:50%;background:var(--st);display:inline-block}
+.estn{background:var(--stbg);color:var(--st);border-radius:999px;min-width:26px;height:22px;display:grid;place-items:center;padding:0 8px;font-size:12px}
+.acc.est.open{border-color:var(--st)}
+.acctools{display:flex;justify-content:flex-end;margin-top:6px}
+.acctools button{border:0;background:transparent;font-weight:800;font-size:12px;color:var(--muted);padding:4px 2px}
+.mesas{flex-wrap:wrap}
 .cathead span{font-family:"Nunito",sans-serif;font-size:12px;color:var(--muted)}
 .grid{display:grid;grid-template-columns:1fr 1fr;gap:8px}
 .item{display:flex;flex-direction:column;justify-content:space-between;gap:6px;text-align:left;background:var(--surface);border:1px solid var(--line);border-radius:13px;padding:10px 11px;min-height:78px;position:relative;transition:transform .08s}
@@ -720,26 +739,35 @@ function setView(v){
 document.querySelectorAll("nav.bottom button").forEach(b=>b.onclick=()=>setView(b.dataset.view));
 
 function renderCarta(){
-  const q=S.q.trim().toLowerCase();
-  const cats=MENU.filter(c=>S.cat==="all"||c.id===S.cat);
+  const q=S.q.trim().toLowerCase(),searching=!!q;
+  if(!S.open)S.open=new Set();
   const qty=n=>S.cart.filter(l=>l.n===n||l.n.startsWith(n+" (")).reduce((a,l)=>a+l.q,0);
-  const menuHtml=cats.map(c=>{
-    const its=c.items.filter(i=>!q||i.n.toLowerCase().includes(q)||i.d.toLowerCase().includes(q));
-    if(!its.length)return"";
-    return`<div class="cathead">${esc(c.t)}${c.note?` <span>· ${esc(c.note)}</span>`:""}</div>
-    <div class="grid">${its.map(i=>{const k=qty(i.n),off=S.agotados.has(i.n);return`<button class="item${k?" on":""}${off?" off":""}${S.dispEdit?" edit":""}" data-c="${c.id}" data-n="${esc(i.n)}" ${off&&!S.dispEdit?'aria-disabled="true"':""}>
+  const itemBtn=(c,i)=>{const k=qty(i.n),off=S.agotados.has(i.n);return`<button class="item${k?" on":""}${off?" off":""}${S.dispEdit?" edit":""}" data-c="${c.id}" data-n="${esc(i.n)}" ${off&&!S.dispEdit?'aria-disabled="true"':""}>
       ${k?`<span class="q num">${k}</span>`:""}${off?`<span class="ag">Agotado</span>`:""}<span><span class="n">${esc(i.n)}</span>${i.d?`<br><span class="d">${esc(i.d)}</span>`:""}</span>
-      <span class="p num">${money(i.p)}</span></button>`}).join("")}</div>`}).join("")||`<div class="empty">Nada coincide con “${esc(S.q)}”.</div>`;
+      <span class="p num">${money(i.p)}</span></button>`};
+  const secs=MENU.map(c=>{
+    const its=c.items.filter(i=>!q||i.n.toLowerCase().includes(q)||i.d.toLowerCase().includes(q));
+    if(searching&&!its.length)return"";
+    const open=searching||S.open.has(c.id);
+    const inCart=c.items.reduce((a,i)=>a+qty(i.n),0),ag=c.items.filter(i=>S.agotados.has(i.n)).length;
+    return`<section class="acc${open?" open":""}" id="acc-${c.id}">
+      <button class="acch" data-acc="${c.id}" aria-expanded="${open}">
+        <span class="acct-t">${esc(c.t)}</span>
+        <span class="accm">${inCart?`<span class="accq num">${inCart}</span>`:""}<span class="accn num">${c.items.length-ag}${ag?`/${c.items.length}`:""}</span><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg></span>
+      </button>
+      ${open?`${c.note?`<div class="accnote">${esc(c.note)}</div>`:""}<div class="grid">${its.map(i=>itemBtn(c,i)).join("")}</div>`:""}
+    </section>`}).join("")||`<div class="empty">Nada coincide con “${esc(S.q)}”.</div>`;
   const at=S.addTo&&S.orders.find(x=>x.id===S.addTo);
   const top=at&&canAddRound(at)
     ?`<div class="banner" style="margin-top:10px"><span>Agregando a <b>${esc(mesaLabel(at))}</b> · pedido #${at.numero} · ronda ${maxRound(at)+1}</span><button data-noadd="1">Cancelar</button></div>`
     :openMesas().length?`<div class="cats mesas" style="margin-top:10px"><span class="lbl">Agregar a mesa:</span>${openMesas().map(o=>`<button data-addto="${o.id}">+ ${esc(mesaLabel(o))}${/#\d/.test(mesaLabel(o))?"":" · #"+o.numero}</button>`).join("")}</div>`:"";
+  const anyOpen=!searching&&S.open.size>0;
   return`${top}<div class="stick">
-    <div class="cats">${[{id:"all",t:"Todo"},...MENU].map(c=>`<button data-cat="${c.id}" aria-pressed="${S.cat===c.id}">${esc(c.t)}</button>`).join("")}</div>
     <input class="search" id="q" type="search" placeholder="Buscar: mango, oreo, bestia…" value="${esc(S.q)}" autocomplete="off">
     ${canEditDisp()?`<div class="dispbar"><span>${S.dispEdit?"Toca un producto para marcarlo agotado o disponible":S.agotados.size?`${S.agotados.size} agotado${S.agotados.size===1?"":"s"} hoy`:"Todo disponible"}</span>
       <span style="display:flex;gap:6px">${S.dispEdit&&S.agotados.size?`<button data-dispreset="1">Todo disponible</button>`:""}<button data-dispedit="1" class="${S.dispEdit?"on":""}">${S.dispEdit?"Listo":"Disponibilidad"}</button></span></div>`:""}
-  </div>${menuHtml}`;
+    ${anyOpen?`<div class="acctools"><button data-accall="close">Contraer todo ▴</button></div>`:!searching?`<div class="acctools"><button data-accall="open">Abrir todo ▾</button></div>`:""}
+  </div><div class="accs">${secs}</div>`;
 }
 
 function renderAddTo(o){
@@ -875,8 +903,17 @@ function renderPedidos(){
   const base=S.orders.filter(inRange),valid=base.filter(o=>o.estado!=="cancelado");
   const venta=valid.reduce((a,o)=>a+o.total,0),cobrado=valid.reduce((a,o)=>a+(o.pagado||0),0);
   const activos=base.filter(o=>ACTIVOS.includes(o.estado)).length;
-  const list=filtered();
-  const F=[["activos","En curso"],["pendiente","Pendientes"],["preparando","Preparando"],["listo","Listos"],["encamino","En camino"],["entregado","Entregados"],...(S.owner?[["porcobrar","Por cobrar"]]:[]),["todos","Todos"]];
+  if(!S.openEst)S.openEst=new Set(["pendiente","preparando","listo","encamino"]);
+  const SEC=[["pendiente","Pendientes"],["preparando","Preparando"],["listo","Listos"],["encamino","En camino"],["entregado","Entregados"],...(S.owner?[["porcobrar","Por cobrar"],["cancelado","Cancelados"]]:[])];
+  const secList=k=>(k==="porcobrar"?base.filter(o=>o.estado!=="cancelado"&&(o.pagado||0)<o.total-0.001):base.filter(o=>o.estado===k))
+    .sort((a,b)=>ACTIVOS.includes(k)?a.createdAt-b.createdAt:b.createdAt-a.createdAt);
+  const secs=SEC.map(([k,t])=>{const l=secList(k),open=S.openEst.has(k);
+    if(!l.length&&(k==="cancelado"||k==="encamino"))return"";
+    return`<section class="acc est st-${k==="porcobrar"?"cancelado":k}${open?" open":""}" id="est-${k}">
+      <button class="acch" data-est="${k}" aria-expanded="${open}"><span class="acct-t"><i class="edot"></i>${t}</span>
+      <span class="accm"><span class="estn num">${l.length}</span><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg></span></button>
+      ${open?`<div class="orders" style="padding:4px 10px 12px">${l.length?l.map(orderCard).join(""):`<div class="empty" style="padding:10px">Nada por aquí.</div>`}</div>`:""}
+    </section>`}).join("");
   return`<div class="kpis">
     <div class="kpi"><div class="k">Pedidos ${S.range==="hoy"?"hoy":"total"}</div><div class="v num">${valid.length}</div></div>
     <div class="kpi"><div class="k">En curso</div><div class="v num">${activos}</div></div>
@@ -884,14 +921,12 @@ function renderPedidos(){
     <div class="kpi"><div class="k">Por cobrar</div><div class="v num" style="color:${venta-cobrado>0.001?"var(--red)":"inherit"}">${money(venta-cobrado)}</div></div>`:""}
    </div>
    ${S.owner?(()=>{const c=renderCaja();return`<button class="cajabtn" id="caja"><span>💵 Efectivo <b class="num">${money(c.efe)}</b></span><span>📱 Apps <b class="num">${money(c.dig)}</b></span><span class="go">Ver caja →</span></button>`})():""}
-   <div class="stick">
-    <div class="cats" data-seg="filter">${F.map(([k,t])=>`<button data-v="${k}" aria-pressed="${S.filter===k}">${t}</button>`).join("")}</div>
-    ${S.owner?`<div class="tools">
+   ${S.owner?`<div class="tools">
      <select id="range" aria-label="Periodo"><option value="hoy" ${S.range==="hoy"?"selected":""}>Hoy</option><option value="todo" ${S.range==="todo"?"selected":""}>Últimos 45 días</option></select>
      <button id="xls">Exportar Excel</button>
     </div>`:""}
-   </div>
-   <div class="orders">${list.length?list.map(orderCard).join(""):`<div class="empty">No hay pedidos en esta vista.</div>`}</div>`;
+   <div class="acctools"><button data-estall="${S.openEst.size?"close":"open"}">${S.openEst.size?"Contraer todo ▴":"Abrir todo ▾"}</button></div>
+   <div class="accs" style="margin-top:4px">${secs}</div>`;
 }
 function itemsHtml(o){
   const li=i=>`<li><span><b class="num">${i.q}×</b> ${i.x?'<span class="xtag">adicional</span> ':""}${esc(i.n)}${i.nota?`<em>${esc(i.nota)}</em>`:""}</span><span class="num">${money(i.p*i.q)}</span></li>`;
@@ -987,6 +1022,9 @@ $("#app").addEventListener("click",e=>{
   if(d.goto){setView(d.goto);return}
   if(d.extra){openExtra(d.extra);return}
   if(d.cat){S.cat=d.cat;render();$("#app").scrollTop=0;return}
+  if(d.acc){if(!S.open)S.open=new Set();const id=d.acc,was=S.open.has(id);was?S.open.delete(id):S.open.add(id);render();
+    if(!was){const el=document.getElementById("acc-"+id),app=$("#app"),st=document.querySelector("#app .stick");if(el)app.scrollTo({top:app.scrollTop+el.getBoundingClientRect().top-app.getBoundingClientRect().top-(st?st.offsetHeight:0)-6,behavior:"smooth"})}return}
+  if(d.accall){S.open=d.accall==="open"?new Set(MENU.map(c=>c.id)):new Set();render();if(d.accall==="close")$("#app").scrollTop=0;return}
   if(d.dispedit&&canEditDisp()){S.dispEdit=!S.dispEdit;render();return}
   if(d.dispreset&&canEditDisp()){S.agotados=new Set();render();fdb.collection("config").doc("disponibilidad").set({agotados:[],updatedAt:Date.now(),por:S.session?.nombre||""}).then(()=>toast("Todo disponible")).catch(e=>toast(fbErr(e)));return}
   if(b.classList.contains("item")&&S.dispEdit&&canEditDisp()){toggleAgotado(d.n);return}
@@ -1004,7 +1042,9 @@ $("#app").addEventListener("click",e=>{
   if(b.id==="send"){submitOrder();return}
   if(b.id==="noadd"||d.noadd){S.addTo=null;render();return}
   if(b.id==="clear"){S.addTo=null;S.cart=[];S.form=blankForm();S.editing=null;render();return}
-  if(b.id==="xls"){exportExcel(filtered());return}
+  if(b.id==="xls"){exportExcel(S.orders.filter(inRange));return}
+  if(d.est){const k=d.est;S.openEst.has(k)?S.openEst.delete(k):S.openEst.add(k);render();return}
+  if(d.estall){S.openEst=d.estall==="open"?new Set(["pendiente","preparando","listo","encamino","entregado"]):new Set();render();return}
   if(b.id==="caja"&&S.owner){openCaja();return}
   if(!S.owner&&(d.edit||d.cancel||d.reopen||d.del||d.delYes||b.id==="xls"))return;
   if(d.adv){const o=S.orders.find(x=>x.id===d.adv);if(!S.owner&&!S.cocina&&!["listo","encamino"].includes(o.estado))return;const ne=nextOf(o);const pt={estado:ne,updatedAt:Date.now()};if(ne==="encamino"){pt.repartidor=S.session?.nombre||"";pt.repartidorUid=S.session?.id||"";pt.salioAt=Date.now()}patchOrder(d.adv,pt);toast(ne==="encamino"?"🛵 En camino":ESTADOS.find(x=>x.k===ne).t);return}
@@ -1047,7 +1087,7 @@ render();
 S.gateMode="loading";renderGate();
 boot();setInterval(()=>{if(S.view==="pedidos")render()},60000);
 /* aviso de nueva versión */
-const APP_VERSION="2026-09-25b";
+const APP_VERSION="2026-09-25d";
 async function checkVersion(){
   try{const t=await fetch(location.pathname+"?nc="+Date.now(),{cache:"no-store"}).then(r=>r.text());
     const m=t.match(/APP_VERSION="([^"]+)"/);
