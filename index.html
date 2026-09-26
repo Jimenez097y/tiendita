@@ -123,6 +123,14 @@ nav.bottom .badge[hidden]{display:none}
 .cjrows{display:flex;flex-direction:column;gap:4px}
 .cjrows div{display:flex;justify-content:space-between;font-size:14px}
 .cjsub{font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:.07em;color:var(--muted);margin:12px 0 4px}
+.pgs{display:flex;flex-direction:column;gap:3px;background:var(--green-bg);border-radius:10px;padding:7px 10px;margin-bottom:4px}
+.pgs div{display:flex;justify-content:space-between;font-size:13px;color:var(--green);font-weight:700}
+.splitrow{display:flex;align-items:center;gap:10px;flex-wrap:wrap;font-weight:700;margin-bottom:10px}
+.itsel{display:flex;flex-direction:column;gap:6px;margin-bottom:10px;max-height:220px;overflow-y:auto}
+.itrow{display:flex;justify-content:space-between;align-items:center;gap:8px;border:1px solid var(--line);border-radius:10px;padding:6px 8px;font-size:13px;font-weight:700}
+.itrow.on{border-color:var(--pink);background:var(--pink-soft)}
+.itrow small{color:var(--muted)}
+.itrow .stepper b{min-width:30px;text-align:center;font-size:12px}
 .dispbar{display:flex;gap:8px;align-items:center;justify-content:space-between;margin-top:8px;font-size:13px;font-weight:700}
 .dispbar button{border:1.5px solid var(--ink);background:transparent;border-radius:999px;padding:6px 12px;font-weight:800;font-size:12px}
 .dispbar button.on{background:var(--ink);color:var(--bg)}
@@ -546,7 +554,8 @@ async function submitOrder(){
   if(S.addTo)return addRound();
   if(S.form.tipo==="En local"&&!mesaKey(S.form.detalle)){toast("Escribe el número de mesa");const i=$("#f-detalle");if(i)i.focus();return}
   const f=S.form,subtotal=cartTotal(),delivery=delivFee(),total=subtotal+delivery;
-  const adel=f.pago==="Adelanto"?Math.min(parseFloat(f.adelanto)||0,total):f.pago==="Pagado"?total:0;
+  const baseP=S.editing?S.orders.find(o=>o.id===S.editing):null;
+  const adel=baseP&&baseP.pagos&&baseP.pagos.length?Math.min(baseP.pagado||0,total):f.pago==="Adelanto"?Math.min(parseFloat(f.adelanto)||0,total):f.pago==="Pagado"?total:0;
   const base=S.editing?S.orders.find(o=>o.id===S.editing):null;
   const o={
     id:base?base.id:"p"+Date.now().toString(36)+Math.random().toString(36).slice(2,6),
@@ -555,7 +564,7 @@ async function submitOrder(){
     estado:base?base.estado:"pendiente",
     cliente:f.cliente.trim(),telefono:f.telefono.replace(/[^\d+]/g,""),tipo:f.tipo,detalle:f.detalle.trim(),
     items:S.cart.map(l=>({n:l.n,p:l.p,q:l.q,nota:l.nota.trim(),r:l.r||(base?maxRound(base):1),...(l.x?{x:true}:{})})),subtotal,delivery,total,rondas:base?(base.rondas||[]):[],cerrada:base?!!base.cerrada:false,
-    metodo:f.metodo,pago:f.pago,pagado:adel,notas:f.notas.trim(),ubicacion:f.tipo==="Delivery"?extractLoc(f.ubicacion):"",pagaCon:f.metodo==="Efectivo"&&parseFloat(f.pagaCon)>0?r2(parseFloat(f.pagaCon)):0,vuelto:f.metodo==="Efectivo"&&parseFloat(f.pagaCon)>0?Math.max(r2(parseFloat(f.pagaCon)-(f.pago==="Adelanto"?adel:total)),0):0
+    metodo:f.metodo,pago:f.pago,pagado:adel,pagos:base&&base.pagos&&base.pagos.length?base.pagos:(adel>0?[{m:f.metodo,monto:adel,pagaCon:0,vuelto:0,por:S.session?.nombre||"",porUid:S.session?.id||"",at:Date.now()}]:[]),notas:f.notas.trim(),ubicacion:f.tipo==="Delivery"?extractLoc(f.ubicacion):"",pagaCon:f.metodo==="Efectivo"&&parseFloat(f.pagaCon)>0?r2(parseFloat(f.pagaCon)):0,vuelto:f.metodo==="Efectivo"&&parseFloat(f.pagaCon)>0?Math.max(r2(parseFloat(f.pagaCon)-(f.pago==="Adelanto"?adel:total)),0):0
   };
   const btn=$("#send");if(btn)btn.disabled=true;
   try{await saveOrder(o)}catch(e){toast(fbErr(e));if(btn)btn.disabled=false;return}
@@ -626,7 +635,7 @@ function renderCaja(){
   const base=S.orders.filter(inRange).filter(o=>o.estado!=="cancelado"&&(o.pagado||0)>0);
   const by={},per={};let efe=0,dig=0,vta=0;
   S.orders.filter(inRange).filter(o=>o.estado!=="cancelado").forEach(o=>vta+=o.total);
-  base.forEach(o=>{const m=o.metodo||"Efectivo",v=o.pagado||0;by[m]=(by[m]||0)+v;if(m==="Efectivo"){efe+=v;const q=(o.cobradoPor||o.atendio||"Sin nombre").split(" ")[0];per[q]=(per[q]||0)+v}else dig+=v});
+  base.forEach(o=>pagosOf(o).forEach(p=>{const m=p.m||"Efectivo",v=p.monto||0;by[m]=(by[m]||0)+v;if(m==="Efectivo"){efe+=v;const q=(String(p.por||o.atendio||"Sin nombre")).split(" ")[0];per[q]=(per[q]||0)+v}else dig+=v}));
   const digs=METODOS.filter(m=>m!=="Efectivo");
   return{efe,dig,vta,por:vta-efe-dig,n:base.length,html:`
     <div class="cajagrid">
@@ -647,37 +656,70 @@ function openCaja(){
 }
 
 /* ===================== COBRO / VUELTO ===================== */
-function openCobro(id){
-  const o=S.orders.find(x=>x.id===id);if(!o)return;
-  const saldo=r2(o.total-(o.pagado||0));
-  let pc=o.pagaCon&&o.pagaCon>=saldo?String(o.pagaCon):"",met=o.metodo||"Efectivo";
-  const bills=[10,20,50,100,200].filter(b=>b>=saldo).slice(0,4);
+function pagosOf(o){
+  if(o.pagos&&o.pagos.length)return o.pagos;
+  return (o.pagado||0)>0?[{m:o.metodo||"Efectivo",monto:o.pagado,pagaCon:o.pagaCon||0,vuelto:o.vuelto||0,por:o.cobradoPor||o.atendio||"",at:o.cobradoAt||o.createdAt}]:[];
+}
+function metodoLabel(o){const ms=[...new Set(pagosOf(o).map(p=>p.m))];return ms.length>1?"Mixto":ms[0]||o.metodo||"Efectivo"}
+function openCobro(id,st){
+  st=st||{};
   const m=$("#modal");
+  let mode=st.mode||"todo",n=st.n||2,sel=st.sel||{},otro="",pc="",met=st.met||"Efectivo";
   const draw=()=>{
-    const v=parseFloat(pc)>0?r2(parseFloat(pc)-saldo):null;
+    const o=S.orders.find(x=>x.id===id);if(!o){m.innerHTML="";return}
+    const saldo=r2(o.total-(o.pagado||0)),prev=pagosOf(o);
+    if(saldo<=0.001){m.innerHTML="";return}
+    let monto=mode==="todo"?saldo:mode==="dividir"?(n<=1?saldo:r2(saldo/n)):mode==="items"?r2(o.items.reduce((a,i,ix)=>a+i.p*(sel[ix]||0),0)):r2(parseFloat(otro)||0);
+    if(mode==="items"&&o.delivery&&sel.dlv)monto=r2(monto+o.delivery);
+    const over=monto>saldo+0.001,valid=monto>0&&!over;
     const efectivo=met==="Efectivo";
-    m.innerHTML=`<div class="modal" id="mbg"><div class="sheet" role="dialog" aria-modal="true" aria-label="Cobrar">
+    const v=efectivo&&parseFloat(pc)>0?r2(parseFloat(pc)-monto):null;
+    const bills=[10,20,50,100,200].filter(b=>b>=monto).slice(0,4);
+    const cierra=valid&&Math.abs(monto-saldo)<0.001;
+    m.innerHTML=`<div class="modal" id="mbg"><div class="sheet" role="dialog" aria-modal="true" aria-label="Cobrar" style="max-height:92%;overflow-y:auto">
       <h3>Cobrar · #${o.numero}${o.tipo==="En local"&&o.detalle?" · "+esc(mesaLabel(o)):""}</h3>
-      <p>${o.pagado>0?`Total ${money(o.total)} · ya pagó ${money(o.pagado)}`:"Total del pedido"}</p>
-      <div class="total" style="margin:0 0 12px"><span>A cobrar</span><strong class="num">${money(saldo)}</strong></div>
-      ${`<div class="seg" style="margin-bottom:12px;flex-wrap:wrap" id="c-met">${METODOS.map(x=>`<button data-m="${x}" aria-pressed="${met===x}">${x}</button>`).join("")}</div>`}
-      ${efectivo?`<label class="f" style="margin-bottom:8px"><span>Paga con (S/)</span><input id="c-pc" inputmode="decimal" value="${esc(pc)}" placeholder="Monto que entrega el cliente"></label>
-      <div class="chips" style="margin-bottom:10px"><button data-b="${saldo}">Exacto</button>${bills.map(b=>`<button data-b="${b}">S/ ${b}</button>`).join("")}</div>
-      <div class="total" style="margin:0 0 14px;border-top:1px dashed var(--line)"><span>Vuelto</span><strong class="num" id="c-v" style="color:${v!=null&&v<0?"var(--red)":"var(--green)"}">${v==null?"—":v<0?"Faltan "+money(-v):money(v)}</strong></div>`:""}
-      <div class="row"><button class="btn ghost" id="c-close">Cancelar</button>
-      <button class="btn primary" id="c-ok" ${efectivo&&v!=null&&v<0?"disabled":""}>Registrar cobro${isOpenMesa(o)?" y cerrar":""}</button></div>
-      
+      <p>Total ${money(o.total)}${o.pagado>0?` · ya pagaron ${money(o.pagado)}`:""}</p>
+      ${prev.length?`<div class="pgs">${prev.map(p=>`<div><span>✓ ${esc(p.m)}${p.por?" · "+esc(String(p.por).split(" ")[0]):""}</span><b class="num">${money(p.monto)}</b></div>`).join("")}</div>`:""}
+      <div class="total" style="margin:6px 0 10px"><span>Falta cobrar</span><strong class="num">${money(saldo)}</strong></div>
+      <div class="seg" style="margin-bottom:10px;flex-wrap:wrap">${[["todo","Todo"],["dividir","Dividir"],["items","Por productos"],["otro","Otro monto"]].map(([k,t])=>`<button data-mode="${k}" aria-pressed="${mode===k}">${t}</button>`).join("")}</div>
+      ${mode==="dividir"?`<div class="splitrow"><span>Entre</span><div class="stepper"><button data-n="-1">−</button><b class="num">${n}</b><button data-n="1">+</button></div><span>personas → <b class="num">${money(monto)}</b> c/u</span></div>`:""}
+      ${mode==="items"?`<div class="itsel">${o.items.map((i,ix)=>`<div class="itrow${sel[ix]?" on":""}"><span>${i.x?'<span class="xtag">adicional</span> ':""}${esc(i.n)} <small class="num">${money(i.p)}</small></span><div class="stepper"><button data-it="${ix}" data-d="-1">−</button><b class="num">${sel[ix]||0}/${i.q}</b><button data-it="${ix}" data-d="1">+</button></div></div>`).join("")}
+        ${o.delivery?`<div class="itrow${sel.dlv?" on":""}"><span>Delivery <small class="num">${money(o.delivery)}</small></span><div class="stepper"><button data-dlv="1">${sel.dlv?"✓":"+"}</button></div></div>`:""}</div>`:""}
+      ${mode==="otro"?`<label class="f" style="margin-bottom:10px"><span>Monto de este pago (S/)</span><input id="c-otro" inputmode="decimal" value="${esc(otro)}" placeholder="Ej. 15.00"></label>`:""}
+      <div class="total" style="margin:0 0 10px;border-top:1.5px solid var(--ink);padding-top:8px"><span>Este pago</span><strong class="num" id="c-monto" style="color:${over?"var(--red)":"inherit"}">${money(monto)}</strong></div>
+      ${over?`<div class="note" style="color:var(--red);margin:-6px 0 8px">Es más de lo que falta cobrar.</div>`:""}
+      <div class="seg" style="margin-bottom:10px;flex-wrap:wrap">${METODOS.map(x=>`<button data-m="${x}" aria-pressed="${met===x}">${x}</button>`).join("")}</div>
+      ${efectivo&&monto>0?`<label class="f" style="margin-bottom:8px"><span>Paga con (S/)</span><input id="c-pc" inputmode="decimal" value="${esc(pc)}" placeholder="Monto que entrega"></label>
+      <div class="chips" style="margin-bottom:8px"><button data-b="${monto}">Exacto</button>${bills.map(b=>`<button data-b="${b}">S/ ${b}</button>`).join("")}</div>
+      <div class="total" style="margin:0 0 12px"><span>Vuelto</span><strong class="num" id="c-v" style="color:${v!=null&&v<0?"var(--red)":"var(--green)"}">${v==null?"—":v<0?"Faltan "+money(-v):money(v)}</strong></div>`:""}
+      <div class="row"><button class="btn ghost" id="c-close">Cerrar</button>
+      <button class="btn primary" id="c-ok" ${!valid||(v!=null&&v<0)?"disabled":""}>${cierra?`Registrar y cerrar${o.tipo==="En local"?" mesa":""}`:`Registrar ${money(monto)}`}</button></div>
     </div></div>`;
     $("#c-close").onclick=()=>m.innerHTML="";
     $("#mbg").onclick=e=>{if(e.target.id==="mbg")m.innerHTML=""};
+    m.querySelectorAll("[data-mode]").forEach(b=>b.onclick=()=>{mode=b.dataset.mode;pc="";draw()});
+    m.querySelectorAll("[data-n]").forEach(b=>b.onclick=()=>{n=Math.max(1,Math.min(20,n+ +b.dataset.n));pc="";draw()});
+    m.querySelectorAll("[data-it]").forEach(b=>b.onclick=()=>{const ix=+b.dataset.it,q=o.items[ix].q;sel[ix]=Math.max(0,Math.min(q,(sel[ix]||0)+ +b.dataset.d));pc="";draw()});
+    m.querySelectorAll("[data-dlv]").forEach(b=>b.onclick=()=>{sel.dlv=!sel.dlv;pc="";draw()});
     m.querySelectorAll("[data-b]").forEach(b=>b.onclick=()=>{pc=b.dataset.b;draw()});
     m.querySelectorAll("[data-m]").forEach(b=>b.onclick=()=>{met=b.dataset.m;draw()});
-    const inp=$("#c-pc");if(inp)inp.oninput=()=>{pc=inp.value;const v2=parseFloat(pc)>0?r2(parseFloat(pc)-saldo):null;const cv=$("#c-v");cv.textContent=v2==null?"—":v2<0?"Faltan "+money(-v2):money(v2);cv.style.color=v2!=null&&v2<0?"var(--red)":"var(--green)";const ok=$("#c-ok");if(ok)ok.disabled=v2!=null&&v2<0};
+    const io=$("#c-otro");if(io){io.oninput=()=>{otro=io.value;clearTimeout(io._t);io._t=setTimeout(()=>{draw();const x=$("#c-otro");if(x){x.focus();x.setSelectionRange(x.value.length,x.value.length)}},500)}}
+    const inp=$("#c-pc");if(inp)inp.oninput=()=>{pc=inp.value;const v2=parseFloat(pc)>0?r2(parseFloat(pc)-monto):null;const cv=$("#c-v");cv.textContent=v2==null?"—":v2<0?"Faltan "+money(-v2):money(v2);cv.style.color=v2!=null&&v2<0?"var(--red)":"var(--green)";const ok=$("#c-ok");if(ok)ok.disabled=!valid||(v2!=null&&v2<0)};
     const ok=$("#c-ok");if(ok)ok.onclick=async()=>{
-      const pcv=met==="Efectivo"&&parseFloat(pc)>0?r2(parseFloat(pc)):0;
-      m.innerHTML="";
-      await patchOrder(o.id,{pagado:o.total,pago:"Pagado",metodo:met,pagaCon:pcv,vuelto:pcv?Math.max(r2(pcv-saldo),0):0,cerrada:o.tipo==="En local"?true:!!o.cerrada,updatedAt:Date.now(),cobradoPor:S.session?.nombre||"",cobradoUid:S.session?.id||"",cobradoAt:Date.now()});
-      toast(`Cobrado #${o.numero}${pcv?" · vuelto "+money(Math.max(pcv-saldo,0)):""}`);
+      ok.disabled=true;
+      const pcv=met==="Efectivo"&&parseFloat(pc)>0?r2(parseFloat(pc)):0,vu=pcv?Math.max(r2(pcv-monto),0):0;
+      const who=S.session?.nombre||"",uid=S.session?.id||"";
+      const pagos=[...pagosOf(o),{m:met,monto,pagaCon:pcv,vuelto:vu,por:who,porUid:uid,at:Date.now()}];
+      const pagado=r2(pagos.reduce((a,p)=>a+p.monto,0)),full=pagado>=o.total-0.001;
+      const ms=[...new Set(pagos.map(p=>p.m))];
+      await patchOrder(o.id,{pagos,pagado:full?o.total:pagado,pago:full?"Pagado":"Parcial",metodo:ms.length>1?"Mixto":met,pagaCon:pcv,vuelto:vu,
+        cerrada:full&&o.tipo==="En local"?true:!!o.cerrada,updatedAt:Date.now(),cobradoPor:who,cobradoUid:uid,cobradoAt:Date.now()});
+      toast(`${full?"Cobrado":"Pago registrado"} ${money(monto)} · ${met}${vu?" · vuelto "+money(vu):""}`);
+      if(full){m.innerHTML="";return}
+      if(mode==="dividir")n=Math.max(1,n-1);
+      if(mode==="items")sel={};
+      otro="";pc="";
+      setTimeout(draw,350);
     };
   };draw();
 }
@@ -690,8 +732,8 @@ function waText(o){
   o.items.forEach(i=>L.push(`• ${i.q} x ${i.n}${i.x?" (adicional)":""} — ${money(i.p*i.q)}${i.nota?`\n   _${i.nota}_`:""}`));
   if(o.delivery)L.push(`Delivery: ${money(o.delivery)}`);
   L.push("",`*Total: ${money(o.total)}*`);
-  if(o.pago==="Pagado")L.push(`Pagado (${o.metodo}) ✅`);
-  else if(o.pago==="Adelanto")L.push(`Adelanto: ${money(o.pagado)} (${o.metodo}) · Saldo: ${money(o.total-o.pagado)}`);
+  if(o.pago==="Pagado")L.push(`Pagado (${metodoLabel(o)}) ✅`);
+  else if((o.pagado||0)>0)L.push(`Pagado: ${money(o.pagado)} (${pagosOf(o).map(p=>p.m).join(" + ")}) · Saldo: ${money(o.total-o.pagado)}`);
   else L.push(`Pago: ${o.metodo} · pendiente`);
   if(o.pagaCon)L.push(`Paga con ${money(o.pagaCon)} · Vuelto ${money(o.vuelto||0)}`);
   if(o.notas)L.push("",`Nota: ${o.notas}`);
@@ -712,18 +754,18 @@ async function exportExcel(list){
     "N°":o.numero,"Fecha":new Date(o.createdAt).toLocaleDateString("es-PE"),"Hora":hhmm(o.createdAt),
     "Cliente":o.cliente||"","Teléfono":o.telefono||"","Tipo":o.tipo,"Mesa/Dirección":o.detalle||"",
     "Productos":o.items.map(i=>`${i.q}x ${i.n}`).join("; "),"Subtotal (S/)":o.subtotal??(o.total-(o.delivery||0)),"Delivery (S/)":o.delivery||0,"Total (S/)":o.total,
-    "Método":o.metodo,"Cobró":o.cobradoPor||"","Paga con (S/)":o.pagaCon||"","Vuelto (S/)":o.pagaCon?(o.vuelto||0):"","Pago":o.pago,"Pagado (S/)":o.pagado||0,"Saldo (S/)":Math.round((o.total-(o.pagado||0))*100)/100,
+    "Método":metodoLabel(o),"Detalle de pagos":pagosOf(o).map(p=>`${p.m} ${p.monto.toFixed(2)}${p.por?" ("+String(p.por).split(" ")[0]+")":""}`).join(" + "),"Cobró":o.cobradoPor||"","Paga con (S/)":o.pagaCon||"","Vuelto (S/)":o.pagaCon?(o.vuelto||0):"","Pago":o.pago,"Pagado (S/)":o.pagado||0,"Saldo (S/)":Math.round((o.total-(o.pagado||0))*100)/100,
     "Estado":ESTADOS.find(e=>e.k===o.estado)?.t||o.estado,"Notas":o.notas||""}));
   const det=[];list.forEach(o=>o.items.forEach(i=>det.push({"N°":o.numero,"Fecha":new Date(o.createdAt).toLocaleDateString("es-PE"),"Ronda":i.r||1,"Producto":i.n,"Adicional":i.x?"Sí":"","Cant.":i.q,"P. unit (S/)":i.p,"Subtotal (S/)":i.p*i.q,"Nota":i.nota||"","Estado":o.estado})));
   const agg={};list.filter(o=>o.estado!=="cancelado").forEach(o=>o.items.forEach(i=>{agg[i.n]=agg[i.n]||{"Producto":i.n,"Unidades":0,"Venta (S/)":0};agg[i.n].Unidades+=i.q;agg[i.n]["Venta (S/)"]+=i.p*i.q}));
   const wb=XLSX.utils.book_new();
-  const ws1=XLSX.utils.json_to_sheet(rows);ws1["!cols"]=[{wch:5},{wch:11},{wch:7},{wch:18},{wch:12},{wch:11},{wch:18},{wch:50},{wch:11},{wch:11},{wch:10},{wch:12},{wch:12},{wch:10},{wch:10},{wch:10},{wch:11},{wch:10},{wch:11},{wch:25}];
+  const ws1=XLSX.utils.json_to_sheet(rows);ws1["!cols"]=[{wch:5},{wch:11},{wch:7},{wch:18},{wch:12},{wch:11},{wch:18},{wch:50},{wch:11},{wch:11},{wch:10},{wch:12},{wch:30},{wch:12},{wch:10},{wch:10},{wch:10},{wch:11},{wch:10},{wch:11},{wch:25}];
   XLSX.utils.book_append_sheet(wb,ws1,"Pedidos");
   const ws2=XLSX.utils.json_to_sheet(det);ws2["!cols"]=[{wch:5},{wch:11},{wch:6},{wch:40},{wch:6},{wch:11},{wch:12},{wch:25},{wch:11}];
   XLSX.utils.book_append_sheet(wb,ws2,"Detalle");
   const ws3=XLSX.utils.json_to_sheet(Object.values(agg).sort((a,b)=>b["Venta (S/)"]-a["Venta (S/)"]));ws3["!cols"]=[{wch:40},{wch:10},{wch:12}];
   XLSX.utils.book_append_sheet(wb,ws3,"Resumen productos");
-  const cj={};list.filter(o=>o.estado!=="cancelado"&&(o.pagado||0)>0).forEach(o=>{const m=o.metodo||"Efectivo";cj[m]=(cj[m]||0)+(o.pagado||0)});
+  const cj={};list.filter(o=>o.estado!=="cancelado"&&(o.pagado||0)>0).forEach(o=>pagosOf(o).forEach(p=>{cj[p.m]=(cj[p.m]||0)+(p.monto||0)}));
   const ws4=XLSX.utils.json_to_sheet(Object.entries(cj).map(([m,v])=>({"Método":m,"Cobrado (S/)":Math.round(v*100)/100})));ws4["!cols"]=[{wch:16},{wch:14}];
   XLSX.utils.book_append_sheet(wb,ws4,"Caja");
   const fname=`pedidos_${S.range==="hoy"?dayKey(Date.now()):"ultimos-45-dias"}.xlsx`;
@@ -942,7 +984,7 @@ function itemsHtml(o){
 function orderCard(o){
   const e=ESTADOS.find(x=>x.k===o.estado)||ESTADOS[0];
   const pag=o.pagado||0,saldo=o.total-pag;
-  const pt=saldo<=0.001?`<span class="paytag ok">Pagado · ${esc(o.metodo)}</span>`:pag>0?`<span class="paytag half">Saldo ${money(saldo)}</span>`:`<span class="paytag unpaid">Por cobrar · ${esc(o.metodo)}</span>`;
+  const pt=saldo<=0.001?`<span class="paytag ok">Pagado · ${esc(metodoLabel(o))}</span>`:pag>0?`<span class="paytag half">Saldo ${money(saldo)}</span>`:`<span class="paytag unpaid">Por cobrar · ${esc(o.metodo)}</span>`;
   const nx=nextOf(o);
   return`<article class="order st-${o.estado}">
    <div class="h"><div><div class="no num">#${o.numero}</div><div class="meta">${S.range==="todo"?new Date(o.createdAt).toLocaleDateString("es-PE")+" · ":""}${hhmm(o.createdAt)} · ${o.tipo==="En local"&&o.detalle?"<b>"+esc(mesaLabel(o))+"</b>"+(o.cerrada?" (cerrada)":""):esc(o.tipo)+(o.detalle?" · "+esc(o.detalle):"")}${o.atendio?" · "+esc(o.atendio.split(" ")[0]):""}</div></div>
@@ -953,7 +995,7 @@ function orderCard(o){
    ${o.notas?`<div class="meta">Nota: ${esc(o.notas)}</div>`:""}
    ${o.delivery?`<div class="meta num" style="display:flex;justify-content:space-between"><span>Delivery</span><span>${money(o.delivery)}</span></div>`:""}
    <div class="tot"><span class="num">${money(o.total)}</span>${pt}</div>
-   ${o.cobradoPor?`<div class="meta">Cobró ${esc(o.cobradoPor.split(" ")[0])} · ${hhmm(o.cobradoAt)}</div>`:""}
+   ${pagosOf(o).length>1||(pag>0&&saldo>0.001)?`<div class="pgs">${pagosOf(o).map(p=>`<div><span>✓ ${esc(p.m)}${p.por?" · "+esc(String(p.por).split(" ")[0]):""}</span><b class="num">${money(p.monto)}</b></div>`).join("")}</div>`:o.cobradoPor?`<div class="meta">Cobró ${esc(o.cobradoPor.split(" ")[0])} · ${hhmm(o.cobradoAt)}</div>`:""}
    ${o.pagaCon?`<div class="meta num" style="display:flex;justify-content:space-between"><span>Paga con ${money(o.pagaCon)}</span><b style="color:var(--ink)">Vuelto ${money(saldo>0.001?Math.max(r2(o.pagaCon-saldo),0):(o.vuelto||0))}</b></div>`:""}
    ${S.confirmDel===o.id?`<div class="confirm">¿Borrar el pedido #${o.numero}? <button class="y" data-del-yes="${o.id}">Sí, borrar</button><button class="n" data-del-no>No</button></div>`:""}
    <div class="acts">${S.delivery?`
@@ -1087,7 +1129,7 @@ render();
 S.gateMode="loading";renderGate();
 boot();setInterval(()=>{if(S.view==="pedidos")render()},60000);
 /* aviso de nueva versión */
-const APP_VERSION="2026-09-25d";
+const APP_VERSION="2026-09-26a";
 async function checkVersion(){
   try{const t=await fetch(location.pathname+"?nc="+Date.now(),{cache:"no-store"}).then(r=>r.text());
     const m=t.match(/APP_VERSION="([^"]+)"/);
