@@ -131,6 +131,27 @@ nav.bottom .badge[hidden]{display:none}
 .itrow.on{border-color:var(--pink);background:var(--pink-soft)}
 .itrow small{color:var(--muted)}
 .itrow .stepper b{min-width:30px;text-align:center;font-size:12px}
+.topone{background:var(--pink-soft);border-radius:12px;padding:10px 12px;font-size:14px;margin-top:8px}
+.rank{display:flex;flex-direction:column;gap:10px}
+.rk{display:flex;flex-direction:column;gap:4px}
+.rkh{display:flex;justify-content:space-between;align-items:baseline;gap:8px;font-size:14px}
+.rkn{font-weight:700;min-width:0}
+.rkn b{color:var(--muted);font-weight:800;margin-right:2px}
+.rkv{white-space:nowrap;color:var(--ink)}
+.rkv b{font-size:16px}
+.rkv small{color:var(--muted);font-weight:700;margin-left:4px}
+.bar{height:8px;border-radius:999px;background:var(--surface2);overflow:hidden}
+.bar i{display:block;height:100%;background:var(--pink);border-radius:999px}
+.rkvar{font-size:12px;color:var(--muted)}
+.zcat{font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:.07em;color:var(--muted);margin:12px 0 6px}
+.zchips{display:flex;flex-wrap:wrap;gap:6px}
+.zchips span{background:var(--surface);border:1px solid var(--line);border-radius:999px;padding:5px 10px;font-size:13px;font-weight:700}
+.zchips span.ag0{color:var(--red);border-style:dashed}
+.rsel{display:flex;gap:6px;flex:1;min-width:0}
+.rsel select,.rsel input{min-width:0}
+.tools .rsel select,.tools .rsel input{flex:1;padding:9px 8px;border-radius:10px;border:1px solid var(--line);background:var(--surface);font-weight:800;font-size:13px}
+.h2 .rsel{flex:0 1 auto;justify-content:flex-end}
+.h2 .rsel input{font-size:13px;padding:5px 6px;border-radius:9px;border:1px solid var(--line);background:var(--surface);font-weight:700}
 .dispbar{display:flex;gap:8px;align-items:center;justify-content:space-between;margin-top:8px;font-size:13px;font-weight:700}
 .dispbar button{border:1.5px solid var(--ink);background:transparent;border-radius:999px;padding:6px 12px;font-weight:800;font-size:12px}
 .dispbar button.on{background:var(--ink);color:var(--bg)}
@@ -288,6 +309,8 @@ label.f textarea{resize:vertical;min-height:44px}
       <svg viewBox="0 0 24 24"><path d="M4 5h2l2 11h10l2-8H7"/><circle cx="9.5" cy="19.5" r="1.3"/><circle cx="16.5" cy="19.5" r="1.3"/></svg>Pedido<span class="badge num" id="badge-cart" hidden>0</span></button>
     <button id="tab-pedidos" role="tab" data-view="pedidos" aria-selected="false">
       <svg viewBox="0 0 24 24"><rect x="4" y="4" width="16" height="17" rx="2"/><path d="M8 9h8M8 13h8M8 17h5"/><path d="M9 2.5h6v3H9z"/></svg><span id="lbl-pedidos">Pedidos</span><span class="badge num" id="badge" hidden>0</span></button>
+    <button id="tab-ventas" role="tab" data-view="ventas" aria-selected="false" hidden>
+      <svg viewBox="0 0 24 24"><path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/></svg>Ventas</button>
     <button id="tab-equipo" role="tab" data-view="equipo" aria-selected="false" hidden>
       <svg viewBox="0 0 24 24"><circle cx="9" cy="8" r="3.2"/><path d="M3.5 19c.6-3.2 2.8-5 5.5-5s4.9 1.8 5.5 5"/><circle cx="17" cy="9" r="2.4"/><path d="M16 14.2c2.3 0 4 1.5 4.5 4"/></svg>Equipo</button>
   </nav>
@@ -405,8 +428,8 @@ function subscribeOrders(){
 function enter(acct){
   S.session=acct;S.owner=acct.rol==="propietario";S.cocina=acct.rol==="cocina";S.delivery=acct.rol==="delivery";if(S.delivery)S.dlvTab="pend";if(S.cocina)S.range="hoy";
   $("#gate").hidden=true;
-  $("#tab-equipo").hidden=!S.owner;
-  $("#phone").style.setProperty("--tabs",S.owner?4:S.delivery?1:3);
+  $("#tab-equipo").hidden=!S.owner;$("#tab-ventas").hidden=!S.owner;
+  $("#phone").style.setProperty("--tabs",S.owner?5:S.delivery?1:3);
   $("#tab-carta").hidden=S.delivery;$("#tab-pedido").hidden=S.delivery;
   const lbl=document.getElementById("lbl-pedidos");if(lbl)lbl.textContent=S.delivery?"Mis deliverys":S.owner||S.cocina?"Pedidos":"Despacho";
   subscribeOrders();subscribeDisp();
@@ -649,7 +672,7 @@ function renderCaja(){
 function openCaja(){
   const c=renderCaja(),m=$("#modal");
   m.innerHTML=`<div class="modal" id="mbg"><div class="sheet" role="dialog" aria-modal="true" aria-label="Caja" style="max-height:88%;overflow-y:auto">
-    <h3>Caja ${S.range==="hoy"?"de hoy":"· últimos 45 días"}</h3><p>${new Date().toLocaleDateString("es-PE",{weekday:"long",day:"numeric",month:"long"})} · ${c.n} cobro${c.n===1?"":"s"}</p>
+    <h3>Caja · ${rangeLabel()}</h3><p>${new Date().toLocaleDateString("es-PE",{weekday:"long",day:"numeric",month:"long"})} · ${c.n} cobro${c.n===1?"":"s"}</p>
     ${c.html}
     <button class="btn ghost" id="cj-close" style="margin-top:14px">Cerrar</button></div></div>`;
   $("#cj-close").onclick=()=>m.innerHTML="";$("#mbg").onclick=e=>{if(e.target.id==="mbg")m.innerHTML=""};
@@ -768,7 +791,7 @@ async function exportExcel(list){
   const cj={};list.filter(o=>o.estado!=="cancelado"&&(o.pagado||0)>0).forEach(o=>pagosOf(o).forEach(p=>{cj[p.m]=(cj[p.m]||0)+(p.monto||0)}));
   const ws4=XLSX.utils.json_to_sheet(Object.entries(cj).map(([m,v])=>({"Método":m,"Cobrado (S/)":Math.round(v*100)/100})));ws4["!cols"]=[{wch:16},{wch:14}];
   XLSX.utils.book_append_sheet(wb,ws4,"Caja");
-  const fname=`pedidos_${S.range==="hoy"?dayKey(Date.now()):"ultimos-45-dias"}.xlsx`;
+  const fname=`pedidos_${S.range==="hoy"?dayKey(Date.now()):S.range==="dia"?(S.rangeDay||dayKey(Date.now())):S.range==="ayer"?dayKey(dayOffset(1)):S.range==="7d"?"ultimos-7-dias":"ultimos-45-dias"}.xlsx`;
   try{XLSX.writeFile(wb,fname);toast("Excel descargado")}catch(e){toast("No se pudo descargar el Excel")}
 }
 
@@ -909,7 +932,28 @@ function renderPedido(){
    </div>`;
 }
 
-function inRange(o){return S.range==="todo"||dayKey(o.createdAt)===dayKey(Date.now())}
+function dayOffset(n){const d=new Date();d.setHours(0,0,0,0);d.setDate(d.getDate()-n);return d}
+function inRange(o){
+  const t=o.createdAt,k=dayKey(t);
+  if(S.range==="todo")return true;
+  if(S.range==="ayer")return k===dayKey(dayOffset(1));
+  if(S.range==="7d")return t>=dayOffset(6).getTime();
+  if(S.range==="dia")return k===(S.rangeDay||dayKey(Date.now()));
+  return k===dayKey(Date.now());
+}
+function rangeLabel(short){
+  if(S.range==="ayer")return"ayer";
+  if(S.range==="7d")return short?"7 días":"últimos 7 días";
+  if(S.range==="todo")return short?"45 días":"últimos 45 días";
+  if(S.range==="dia"){const d=new Date((S.rangeDay||dayKey(Date.now()))+"T12:00:00");return d.toLocaleDateString("es-PE",{weekday:"short",day:"numeric",month:"short"})}
+  return"hoy";
+}
+function rangeSelect(style){
+  const minD=dayKey(dayOffset(44)),maxD=dayKey(Date.now());
+  return`<span class="rsel"><select id="range" aria-label="Periodo" ${style?`style="${style}"`:""}>
+    ${[["hoy","Hoy"],["ayer","Ayer"],["7d","Últimos 7 días"],["todo","Últimos 45 días"],["dia","Elegir un día…"]].map(([k,t])=>`<option value="${k}" ${S.range===k?"selected":""}>${t}</option>`).join("")}</select>
+    ${S.range==="dia"?`<input type="date" id="rangeDay" min="${minD}" max="${maxD}" value="${S.rangeDay||maxD}">`:""}</span>`;
+}
 function filtered(){
   return S.orders.filter(inRange).filter(o=>{
     if(S.filter==="activos")return ACTIVOS.includes(o.estado);
@@ -957,14 +1001,14 @@ function renderPedidos(){
       ${open?`<div class="orders" style="padding:4px 10px 12px">${l.length?l.map(orderCard).join(""):`<div class="empty" style="padding:10px">Nada por aquí.</div>`}</div>`:""}
     </section>`}).join("");
   return`<div class="kpis">
-    <div class="kpi"><div class="k">Pedidos ${S.range==="hoy"?"hoy":"total"}</div><div class="v num">${valid.length}</div></div>
+    <div class="kpi"><div class="k">Pedidos ${rangeLabel(true)}</div><div class="v num">${valid.length}</div></div>
     <div class="kpi"><div class="k">En curso</div><div class="v num">${activos}</div></div>
     ${S.owner?`<div class="kpi"><div class="k">Venta</div><div class="v num">${money(venta)}</div></div>
     <div class="kpi"><div class="k">Por cobrar</div><div class="v num" style="color:${venta-cobrado>0.001?"var(--red)":"inherit"}">${money(venta-cobrado)}</div></div>`:""}
    </div>
    ${S.owner?(()=>{const c=renderCaja();return`<button class="cajabtn" id="caja"><span>💵 Efectivo <b class="num">${money(c.efe)}</b></span><span>📱 Apps <b class="num">${money(c.dig)}</b></span><span class="go">Ver caja →</span></button>`})():""}
    ${S.owner?`<div class="tools">
-     <select id="range" aria-label="Periodo"><option value="hoy" ${S.range==="hoy"?"selected":""}>Hoy</option><option value="todo" ${S.range==="todo"?"selected":""}>Últimos 45 días</option></select>
+     ${rangeSelect()}
      <button id="xls">Exportar Excel</button>
     </div>`:""}
    <div class="acctools"><button data-estall="${S.openEst.size?"close":"open"}">${S.openEst.size?"Contraer todo ▴":"Abrir todo ▾"}</button></div>
@@ -987,7 +1031,7 @@ function orderCard(o){
   const pt=saldo<=0.001?`<span class="paytag ok">Pagado · ${esc(metodoLabel(o))}</span>`:pag>0?`<span class="paytag half">Saldo ${money(saldo)}</span>`:`<span class="paytag unpaid">Por cobrar · ${esc(o.metodo)}</span>`;
   const nx=nextOf(o);
   return`<article class="order st-${o.estado}">
-   <div class="h"><div><div class="no num">#${o.numero}</div><div class="meta">${S.range==="todo"?new Date(o.createdAt).toLocaleDateString("es-PE")+" · ":""}${hhmm(o.createdAt)} · ${o.tipo==="En local"&&o.detalle?"<b>"+esc(mesaLabel(o))+"</b>"+(o.cerrada?" (cerrada)":""):esc(o.tipo)+(o.detalle?" · "+esc(o.detalle):"")}${o.atendio?" · "+esc(o.atendio.split(" ")[0]):""}</div></div>
+   <div class="h"><div><div class="no num">#${o.numero}</div><div class="meta">${S.range!=="hoy"&&dayKey(o.createdAt)!==dayKey(Date.now())?new Date(o.createdAt).toLocaleDateString("es-PE",{day:"numeric",month:"short"})+" · ":""}${hhmm(o.createdAt)} · ${o.tipo==="En local"&&o.detalle?"<b>"+esc(mesaLabel(o))+"</b>"+(o.cerrada?" (cerrada)":""):esc(o.tipo)+(o.detalle?" · "+esc(o.detalle):"")}${o.atendio?" · "+esc(o.atendio.split(" ")[0]):""}</div></div>
      <span class="pill">${e.t}</span></div>
    ${o.cliente||o.telefono?`<div class="who">${esc(o.cliente||"")}${o.telefono?` <span class="meta num">${esc(o.telefono)}</span>`:""}</div>`:""}
    ${dlvBlock(o)}
@@ -1020,6 +1064,42 @@ function orderCard(o){
    </div></article>`;
 }
 
+function renderVentas(){
+  if(!S.owner)return"";
+  const menuIdx={};MENU.forEach(c=>c.items.forEach(i=>menuIdx[i.n]={cat:c.t,catId:c.id}));
+  const base=n=>{if(menuIdx[n])return n;const b=n.split(" (")[0];return menuIdx[b]?b:n};
+  const valid=S.orders.filter(inRange).filter(o=>o.estado!=="cancelado");
+  const agg={},xs={};let units=0;
+  valid.forEach(o=>o.items.forEach(i=>{
+    if(i.x){xs[i.n]=xs[i.n]||{q:0,v:0};xs[i.n].q+=i.q;xs[i.n].v+=i.p*i.q;return}
+    const k=base(i.n);agg[k]=agg[k]||{q:0,v:0,var:{}};agg[k].q+=i.q;agg[k].v+=i.p*i.q;units+=i.q;
+    if(k!==i.n){const vn=i.n.slice(k.length).replace(/^\s*\(|\)\s*$/g,"");agg[k].var[vn]=(agg[k].var[vn]||0)+i.q}
+  }));
+  const rows=Object.entries(agg).sort((a,b)=>b[1].q-a[1].q||b[1].v-a[1].v);
+  const max=rows.length?rows[0][1].q:1;
+  const tab=S.venTab||"top";
+  const zero=[];MENU.forEach(c=>{const z=c.items.filter(i=>!agg[i.n]);if(z.length)zero.push([c,z])});
+  const zeroN=zero.reduce((a,[,z])=>a+z.length,0);
+  const lbl=S.range==="hoy"?"hoy":S.range==="ayer"?"ayer":S.range==="dia"?"el "+rangeLabel():"en "+rangeLabel();
+  return`<div class="h2"><span>Ventas por producto</span>
+    ${rangeSelect("font-size:13px;padding:6px 8px;border-radius:9px;border:1px solid var(--line);background:var(--surface);font-weight:800")}</div>
+   <div class="kpis" style="margin-top:0">
+    <div class="kpi"><div class="k">Unidades ${lbl}</div><div class="v num">${units}</div></div>
+    <div class="kpi"><div class="k">Productos vendidos</div><div class="v num">${rows.length}<span style="font-size:13px;color:var(--muted)"> / ${Object.keys(menuIdx).length}</span></div></div>
+   </div>
+   ${rows.length?`<div class="topone">🏆 Lo más pedido ${lbl}: <b>${esc(rows[0][0])}</b> · <span class="num">${rows[0][1].q}</span></div>`:""}
+   <div class="seg" data-seg="ven" style="margin:10px 0">
+    <button data-v="top" aria-pressed="${tab==="top"}">Lo que se vende <span class="num">(${rows.length})</span></button>
+    <button data-v="zero" aria-pressed="${tab==="zero"}">Sin ventas <span class="num">(${zeroN})</span></button></div>
+   ${tab==="top"?(rows.length?`<div class="rank">${rows.map(([n,a],ix)=>`<div class="rk" title="${esc(n)}: ${a.q} unidades · ${money(a.v)}">
+      <div class="rkh"><span class="rkn"><b class="num">${ix+1}.</b> ${esc(n)}</span><span class="rkv"><b class="num">${a.q}</b> <small class="num">${money(a.v)}</small></span></div>
+      <div class="bar"><i style="width:${Math.max(4,Math.round(a.q/max*100))}%"></i></div>
+      ${Object.keys(a.var).length?`<div class="rkvar">${Object.entries(a.var).sort((x,y)=>y[1]-x[1]).map(([vn,q])=>`${esc(vn)} ${q}`).join(" · ")}</div>`:""}
+    </div>`).join("")}</div>`:`<div class="empty">Todavía no hay ventas ${lbl}.</div>`)
+   :(zeroN?zero.map(([c,z])=>`<div class="zcat">${esc(c.t)}</div><div class="zchips">${z.map(i=>`<span class="${S.agotados.has(i.n)?"ag0":""}">${esc(i.n)}${S.agotados.has(i.n)?" · agotado":""}</span>`).join("")}</div>`).join(""):`<div class="empty">¡Todo se ha vendido al menos una vez ${lbl}! 🎉</div>`)}
+   ${Object.keys(xs).length&&tab==="top"?`<div class="zcat" style="margin-top:14px">Adicionales</div><div class="rank">${Object.entries(xs).sort((a,b)=>b[1].q-a[1].q).map(([n,a])=>`<div class="rkh" style="padding:4px 0"><span class="rkn">${esc(n)}</span><span class="rkv"><b class="num">${a.q}</b> <small class="num">${money(a.v)}</small></span></div>`).join("")}</div>`:""}
+   <div class="note" style="margin-top:12px">Se actualiza solo con cada pedido. No cuenta pedidos cancelados; sí cuenta las rondas agregadas.</div>`;
+}
 function renderEquipo(){
   if(!S.owner)return"";
   const f=S.acctForm,me=S.session?.id;
@@ -1046,7 +1126,7 @@ function render(){
   const app=$("#app"),st=app.scrollTop;
   const focusId=document.activeElement?.id,selS=document.activeElement?.selectionStart;
   if(!S.session){app.innerHTML="";return}
-  app.innerHTML=S.view==="carta"?renderCarta():S.view==="pedido"?renderPedido():S.view==="equipo"?renderEquipo():renderPedidos();
+  app.innerHTML=S.view==="carta"?renderCarta():S.view==="pedido"?renderPedido():S.view==="equipo"?renderEquipo():S.view==="ventas"?renderVentas():renderPedidos();
   app.scrollTop=st;
   if(focusId){const el=document.getElementById(focusId);if(el&&el.tagName!=="BUTTON"&&app.contains(el)){el.focus({preventScroll:true});try{if(selS!=null)el.setSelectionRange(selS,selS)}catch(e){}}}
   const bar=$("#bar");
@@ -1077,7 +1157,7 @@ $("#app").addEventListener("click",e=>{
   if(d.inc!=null){S.cart[+d.inc].q++;render();return}
   if(d.dec!=null){const l=S.cart[+d.dec];l.q--;if(l.q<=0)S.cart.splice(+d.dec,1);render();return}
   const seg=b.closest("[data-seg]");
-  if(seg&&d.v){if(seg.dataset.seg==="tipo")S.form.tipo=d.v;else if(seg.dataset.seg==="rol")S.acctForm.rol=d.v;else if(seg.dataset.seg==="desp"){S.despTab=d.v;render();$("#app").scrollTop=0;return}else if(seg.dataset.seg==="dlv"){S.dlvTab=d.v;render();$("#app").scrollTop=0;return}else S.filter=d.v;render();return}
+  if(seg&&d.v){if(seg.dataset.seg==="tipo")S.form.tipo=d.v;else if(seg.dataset.seg==="rol")S.acctForm.rol=d.v;else if(seg.dataset.seg==="desp"){S.despTab=d.v;render();$("#app").scrollTop=0;return}else if(seg.dataset.seg==="ven"){S.venTab=d.v;render();$("#app").scrollTop=0;return}else if(seg.dataset.seg==="dlv"){S.dlvTab=d.v;render();$("#app").scrollTop=0;return}else S.filter=d.v;render();return}
   if(d.acctDel&&S.owner){S.confirmDel="acct:"+d.acctDel;render();return}
   if(d.acctYes&&S.owner){S.confirmDel=null;setActive(d.acctYes,false).then(()=>{toast("Usuario desactivado");loadAccounts()}).catch(e=>toast(fbErr(e)));return}
   if(d.acctOn&&S.owner){setActive(d.acctOn,true).then(()=>{toast("Usuario reactivado");loadAccounts()}).catch(e=>toast(fbErr(e)));return}
@@ -1121,7 +1201,8 @@ $("#app").addEventListener("submit",async e=>{
 });
 $("#app").addEventListener("change",e=>{
   const t=e.target;
-  if(t.id==="range"){S.range=t.value;render();return}
+  if(t.id==="range"){S.range=t.value;if(t.value==="dia"&&!S.rangeDay)S.rangeDay=dayKey(dayOffset(1));render();return}
+  if(t.id==="rangeDay"){S.rangeDay=t.value||dayKey(Date.now());render();return}
   if(t.dataset.f==="pago"||t.dataset.f==="metodo"){S.form[t.dataset.f]=t.value;render()}
 });
 
@@ -1129,7 +1210,7 @@ render();
 S.gateMode="loading";renderGate();
 boot();setInterval(()=>{if(S.view==="pedidos")render()},60000);
 /* aviso de nueva versión */
-const APP_VERSION="2026-09-26a";
+const APP_VERSION="2026-09-27b";
 async function checkVersion(){
   try{const t=await fetch(location.pathname+"?nc="+Date.now(),{cache:"no-store"}).then(r=>r.text());
     const m=t.match(/APP_VERSION="([^"]+)"/);
