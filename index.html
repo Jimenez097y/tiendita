@@ -152,6 +152,25 @@ nav.bottom .badge[hidden]{display:none}
 .tools .rsel select,.tools .rsel input{flex:1;padding:9px 8px;border-radius:10px;border:1px solid var(--line);background:var(--surface);font-weight:800;font-size:13px}
 .h2 .rsel{flex:0 1 auto;justify-content:flex-end}
 .h2 .rsel input{font-size:13px;padding:5px 6px;border-radius:9px;border:1px solid var(--line);background:var(--surface);font-weight:700}
+#tab-finanzas{order:4}#tab-equipo{order:5}#tab-ventas{order:3}#tab-pedidos{order:2}#tab-carta{order:0}#tab-pedido{order:1}
+.finsum{background:var(--ink);color:var(--bg);border-radius:16px;padding:14px 16px;display:flex;flex-direction:column;gap:6px}
+.finsum div{display:flex;justify-content:space-between;font-size:14px;font-weight:700}
+.finsum .k{font-size:11px;font-weight:800;letter-spacing:.08em;text-transform:uppercase;opacity:.8}
+.finsum .ln{height:1px;background:currentColor;opacity:.25}
+.finsum .big b{font-size:24px;color:var(--pink)}
+.finsum .sm{font-size:12px;opacity:.85;justify-content:flex-start;gap:4px}
+.finbadge{background:var(--red);color:#fff;border-radius:999px;padding:0 7px;font-size:12px;margin-left:4px}
+.fin3{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:6px}
+.fin3>div{border-radius:12px;padding:9px 10px}
+.fin3 .k{font-size:10px;font-weight:800;letter-spacing:.06em;text-transform:uppercase}
+.fin3 .v{font-size:16px;font-weight:800}
+.fin3 .r{background:var(--red-bg);color:var(--red)}.fin3 .a{background:var(--amber-bg);color:var(--amber)}.fin3 .n{background:var(--surface);border:1px solid var(--line)}
+.fincard .meta{font-size:12px;color:var(--muted);font-weight:600}
+.fincard .rkn{font-size:14px}
+.fincard{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:11px 12px;display:flex;flex-direction:column;gap:5px}
+.linkbtn{border:0;background:transparent;font-weight:800;font-size:12px;color:var(--muted);padding:6px 4px;text-decoration:underline}
+.linkbtn.danger{color:var(--red)}
+.paybtn{border:1.5px solid var(--ink);background:var(--bg);border-radius:10px;padding:7px 14px;font-weight:800;font-size:13px}
 .dispbar{display:flex;gap:8px;align-items:center;justify-content:space-between;margin-top:8px;font-size:13px;font-weight:700}
 .dispbar button{border:1.5px solid var(--ink);background:transparent;border-radius:999px;padding:6px 12px;font-weight:800;font-size:12px}
 .dispbar button.on{background:var(--ink);color:var(--bg)}
@@ -309,6 +328,8 @@ label.f textarea{resize:vertical;min-height:44px}
       <svg viewBox="0 0 24 24"><path d="M4 5h2l2 11h10l2-8H7"/><circle cx="9.5" cy="19.5" r="1.3"/><circle cx="16.5" cy="19.5" r="1.3"/></svg>Pedido<span class="badge num" id="badge-cart" hidden>0</span></button>
     <button id="tab-pedidos" role="tab" data-view="pedidos" aria-selected="false">
       <svg viewBox="0 0 24 24"><rect x="4" y="4" width="16" height="17" rx="2"/><path d="M8 9h8M8 13h8M8 17h5"/><path d="M9 2.5h6v3H9z"/></svg><span id="lbl-pedidos">Pedidos</span><span class="badge num" id="badge" hidden>0</span></button>
+    <button id="tab-finanzas" role="tab" data-view="finanzas" aria-selected="false" hidden>
+      <svg viewBox="0 0 24 24"><rect x="3" y="6" width="18" height="13" rx="2"/><path d="M3 10h18M7 15h4"/></svg>Finanzas<span class="badge num" id="badge-fin" hidden>0</span></button>
     <button id="tab-ventas" role="tab" data-view="ventas" aria-selected="false" hidden>
       <svg viewBox="0 0 24 24"><path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/></svg>Ventas</button>
     <button id="tab-equipo" role="tab" data-view="equipo" aria-selected="false" hidden>
@@ -428,11 +449,11 @@ function subscribeOrders(){
 function enter(acct){
   S.session=acct;S.owner=acct.rol==="propietario";S.cocina=acct.rol==="cocina";S.delivery=acct.rol==="delivery";if(S.delivery)S.dlvTab="pend";if(S.cocina)S.range="hoy";
   $("#gate").hidden=true;
-  $("#tab-equipo").hidden=!S.owner;$("#tab-ventas").hidden=!S.owner;
+  $("#tab-equipo").hidden=!S.owner;$("#tab-ventas").hidden=!S.owner;$("#tab-finanzas").hidden=!S.owner;
   $("#phone").style.setProperty("--tabs",S.owner?5:S.delivery?1:3);
-  $("#tab-carta").hidden=S.delivery;$("#tab-pedido").hidden=S.delivery;
+  $("#tab-carta").hidden=S.delivery;$("#tab-pedido").hidden=S.delivery||S.owner;
   const lbl=document.getElementById("lbl-pedidos");if(lbl)lbl.textContent=S.delivery?"Mis deliverys":S.owner||S.cocina?"Pedidos":"Despacho";
-  subscribeOrders();subscribeDisp();
+  subscribeOrders();subscribeDisp();if(S.owner)subscribeFin();
   if(S.owner)loadAccounts();
   S.view=S.delivery?"pedidos":"carta";document.querySelectorAll("nav.bottom button").forEach(b=>b.setAttribute("aria-selected",b.dataset.view===S.view));
   renderMe(true);render();
@@ -441,7 +462,7 @@ function enter(acct){
 }
 async function logout(){
   if(unsubOrders){unsubOrders();unsubOrders=null}
-  if(unsubDisp){unsubDisp();unsubDisp=null}S.dispEdit=false;
+  if(unsubDisp){unsubDisp();unsubDisp=null}S.dispEdit=false;unsubscribeFin();
   S.session=null;S.owner=false;S.cocina=false;S.delivery=false;S.despTab="despachar";S.orders=[];S.accounts=[];S.cart=[];S.form=blankForm();S.editing=null;S.addTo=null;
   $("#modal").innerHTML="";S.gateMode="login";S.gateMsg=null;
   try{await auth.signOut()}catch(e){}
@@ -667,6 +688,7 @@ function renderCaja(){
     </div>
     <div class="cjrows">${digs.map(m=>`<div><span>${m}</span><b class="num">${money(by[m]||0)}</b></div>`).join("")}</div>
     ${Object.keys(per).length?`<div class="cjsub">Efectivo por persona (para cuadrar)</div><div class="cjrows">${Object.entries(per).sort((a,b)=>b[1]-a[1]).map(([k,v])=>`<div><span>${esc(k)}</span><b class="num">${money(v)}</b></div>`).join("")}</div>`:""}
+    ${(()=>{const cs=(S.compras||[]).filter(x=>x.pago==="Efectivo"&&inRange({createdAt:x.fecha})).reduce((a,x)=>a+x.total,0),os=(S.obligs||[]).filter(o=>o.pagado&&o.metodo==="Efectivo"&&o.pagadoAt&&inRange({createdAt:o.pagadoAt})).reduce((a,o)=>a+o.monto,0);return cs+os>0?`<div class="cjsub">Salidas de efectivo</div><div class="cjrows"><div><span>Compras en efectivo</span><b class="num">− ${money(cs)}</b></div><div><span>Obligaciones en efectivo</span><b class="num">− ${money(os)}</b></div><div style="border-top:1px dashed var(--line);padding-top:4px"><span><b>Efectivo que debería haber</b></span><b class="num">${money(efe-cs-os)}</b></div></div>`:""})()}
     <div class="cjrows" style="margin-top:10px;border-top:1.5px solid var(--ink);padding-top:8px"><div><span>Total cobrado</span><b class="num">${money(efe+dig)}</b></div><div><span>Por cobrar</span><b class="num" style="color:${vta-efe-dig>0.001?"var(--red)":"inherit"}">${money(Math.max(vta-efe-dig,0))}</b></div></div>`};
 }
 function openCaja(){
@@ -676,6 +698,226 @@ function openCaja(){
     ${c.html}
     <button class="btn ghost" id="cj-close" style="margin-top:14px">Cerrar</button></div></div>`;
   $("#cj-close").onclick=()=>m.innerHTML="";$("#mbg").onclick=e=>{if(e.target.id==="mbg")m.innerHTML=""};
+}
+
+/* ===================== FINANZAS (solo propietarios) ===================== */
+const RUBROS=["Frutas","Lácteos","Carnes","Panadería","Descartables","Bebidas","Limpieza","Otros"];
+const PAGOS_COMPRA=["Efectivo","Yape","Plin","Transferencia","Crédito"];
+const TIPOS_OBL=["Única","Mensual","Quincenal"];
+S.compras=[];S.obligs=[];S.finTab="compras";S.finMes=0;S.finConfirm=null;
+let unsubCompras=null,unsubObligs=null;
+const ymdToDate=s=>new Date(String(s||dayKey(Date.now()))+"T12:00:00");
+const addDaysYmd=(s,n)=>{const d=ymdToDate(s);d.setDate(d.getDate()+n);return dayKey(d)};
+const addMonthYmd=s=>{const d=ymdToDate(s),day=d.getDate();d.setDate(1);d.setMonth(d.getMonth()+1);const last=new Date(d.getFullYear(),d.getMonth()+1,0).getDate();d.setDate(Math.min(day,last));return dayKey(d)};
+const daysTo=s=>Math.round((ymdToDate(s).getTime()-ymdToDate(dayKey(Date.now())).getTime())/86400000);
+function mesRange(off){const d=new Date();d.setHours(0,0,0,0);d.setDate(1);d.setMonth(d.getMonth()-off);const a=d.getTime();const e=new Date(d);e.setMonth(e.getMonth()+1);return[a,e.getTime(),d]}
+const mesNombre=off=>mesRange(off)[2].toLocaleDateString("es-PE",{month:"long",year:"numeric"});
+function subscribeFin(){
+  if(!S.owner)return;
+  if(unsubCompras)unsubCompras();if(unsubObligs)unsubObligs();
+  unsubCompras=fdb.collection("compras").where("fecha",">=",mesRange(1)[0]).orderBy("fecha","desc").limit(600)
+    .onSnapshot(q=>{S.compras=q.docs.map(d=>({id:d.id,...d.data()}));if(S.view==="finanzas")render()},e=>{console.error(e);toast(fbErr(e))});
+  unsubObligs=fdb.collection("obligaciones").orderBy("vence","desc").limit(400)
+    .onSnapshot(q=>{S.obligs=q.docs.map(d=>({id:d.id,...d.data()}));if(S.view==="finanzas")render()},e=>{console.error(e);toast(fbErr(e))});
+}
+function unsubscribeFin(){if(unsubCompras){unsubCompras();unsubCompras=null}if(unsubObligs){unsubObligs();unsubObligs=null}S.compras=[];S.obligs=[]}
+function finCalc(off){
+  const [a,b]=mesRange(off),inM=t=>t>=a&&t<b;
+  let ventas=0;
+  S.orders.filter(o=>o.estado!=="cancelado").forEach(o=>pagosOf(o).forEach(p=>{if(inM(p.at||o.createdAt))ventas+=p.monto||0}));
+  const comprasMes=S.compras.filter(c=>inM(c.fecha));
+  const sumCompras=comprasMes.reduce((x,c)=>x+c.total,0);
+  const sumCredito=comprasMes.filter(c=>c.pago==="Crédito").reduce((x,c)=>x+c.total,0);
+  const comprasContado=sumCompras-sumCredito;
+  const pagadasMes=S.obligs.filter(o=>o.pagado&&inM(o.pagadoAt||0));
+  const oblPagadas=pagadasMes.reduce((x,o)=>x+o.monto,0);
+  const finMes=dayKey(new Date(b-86400000));
+  const pendMes=S.obligs.filter(o=>!o.pagado&&o.vence<=finMes);
+  const rub={};comprasMes.forEach(c=>rub[c.rubro]=(rub[c.rubro]||0)+c.total);
+  return{ventas,sumCompras,sumCredito,comprasContado,oblPagadas,queda:ventas-comprasContado-oblPagadas,
+    pendMes:pendMes.reduce((x,o)=>x+o.monto,0),comprasMes,rub,pagadasMes,a,b};
+}
+function renderFinanzas(){
+  if(!S.owner)return"";
+  const off=S.finMes||0,c=finCalc(off),tab=S.finTab||"compras";
+  const pend=S.obligs.filter(o=>!o.pagado).sort((x,y)=>x.vence<y.vence?-1:1);
+  const venc=pend.filter(o=>daysTo(o.vence)<0),sem=pend.filter(o=>{const d=daysTo(o.vence);return d>=0&&d<=7});
+  const alert=venc.length+sem.length;
+  const rubs=Object.entries(c.rub).sort((x,y)=>y[1]-x[1]),rmax=rubs.length?rubs[0][1]:1;
+  return`<div class="h2"><span>Finanzas</span>
+     <select id="finMes" aria-label="Mes" style="font-size:13px;padding:6px 8px;border-radius:9px;border:1px solid var(--line);background:var(--surface);font-weight:800">
+      <option value="0" ${off===0?"selected":""}>${esc(mesNombre(0))}</option><option value="1" ${off===1?"selected":""}>${esc(mesNombre(1))}</option></select></div>
+   <div class="finsum">
+    <div class="k">Resumen de ${esc(mesNombre(off).split(" ")[0])}</div>
+    <div><span>Ventas cobradas</span><b class="num">${money(c.ventas)}</b></div>
+    <div><span>− Compras pagadas</span><b class="num">${money(c.comprasContado)}</b></div>
+    <div><span>− Obligaciones pagadas</span><b class="num">${money(c.oblPagadas)}</b></div>
+    <div class="ln"></div>
+    <div class="big"><span>Queda</span><b class="num">${money(c.queda)}</b></div>
+    <div class="sm">Aún por pagar ${off===0?"este mes":"de ese mes"}: <b class="num">${money(c.pendMes)}</b></div>
+   </div>
+   <div class="seg" data-seg="fin" style="margin:12px 0 10px">
+    <button data-v="compras" aria-pressed="${tab==="compras"}">Compras</button>
+    <button data-v="pagar" aria-pressed="${tab==="pagar"}">Por pagar${alert?` <span class="finbadge num">${alert}</span>`:""}</button></div>
+   ${tab==="compras"?`
+    <div class="kpis" style="margin-top:0">
+     <div class="kpi"><div class="k">Compras del mes</div><div class="v num">${money(c.sumCompras)}</div></div>
+     <div class="kpi"><div class="k">A crédito</div><div class="v num" style="color:${c.sumCredito>0?"var(--red)":"inherit"}">${money(c.sumCredito)}</div></div>
+    </div>
+    ${rubs.length?`<div class="zcat">Por rubro</div><div class="rank">${rubs.map(([n,v])=>`<div class="rk"><div class="rkh"><span class="rkn">${esc(n)}</span><span class="rkv"><b class="num">${money(v)}</b></span></div><div class="bar"><i style="width:${Math.max(4,Math.round(v/rmax*100))}%"></i></div></div>`).join("")}</div>`:""}
+    <button class="btn primary" data-fin="nuevaCompra" style="margin-top:12px">+ Registrar compra</button>
+    <div class="zcat">Compras de ${esc(mesNombre(off).split(" ")[0])}</div>
+    <div class="orders">${c.comprasMes.length?c.comprasMes.map(x=>`<article class="fincard">
+      <div class="rkh"><span class="rkn">${esc(x.prod)}</span><b class="num">${money(x.total)}</b></div>
+      <div class="meta">${esc(String(x.cant))} ${esc(x.und)}${x.cant>0?` · ${money(x.total/x.cant)} por ${esc(x.und.replace(/s$/,""))}`:""} · ${esc(x.rubro)}</div>
+      <div class="rkh"><span class="meta">${new Date(x.fecha).toLocaleDateString("es-PE",{day:"numeric",month:"short"})} · ${esc(x.prov||"Sin proveedor")}${x.comprobante&&x.comprobante!=="Ninguno"?" · "+esc(x.comprobante):""}</span><span class="paytag ${x.pago==="Crédito"?"half":"ok"}">${x.pago==="Crédito"?"A crédito":esc(x.pago)}</span></div>
+      ${S.finConfirm==="c:"+x.id?`<div class="confirm">¿Borrar esta compra? <button class="y" data-fin="delCompraOk" data-id="${x.id}">Sí, borrar</button><button class="n" data-fin="cancelDel">No</button></div>`:`<div style="text-align:right"><button class="linkbtn" data-fin="delCompra" data-id="${x.id}">Borrar</button></div>`}
+     </article>`).join(""):`<div class="empty">Aún no hay compras registradas en este mes.</div>`}</div>`
+   :`
+    <div class="fin3">
+     <div class="r"><div class="k">Vencido</div><div class="v num">${money(venc.reduce((x,o)=>x+o.monto,0))}</div></div>
+     <div class="a"><div class="k">7 días</div><div class="v num">${money(sem.reduce((x,o)=>x+o.monto,0))}</div></div>
+     <div class="n"><div class="k">Todo pendiente</div><div class="v num">${money(pend.reduce((x,o)=>x+o.monto,0))}</div></div>
+    </div>
+    <button class="btn primary" data-fin="nuevaObl" style="margin-top:12px">+ Nueva obligación</button>
+    <div class="zcat">Pendientes</div>
+    <div class="orders">${pend.length?pend.map(oblCard).join(""):`<div class="empty">No hay nada pendiente de pago. 🎉</div>`}</div>
+    ${c.pagadasMes.length?`<div class="zcat">Pagadas en ${esc(mesNombre(off).split(" ")[0])}</div><div class="orders">${c.pagadasMes.sort((x,y)=>(y.pagadoAt||0)-(x.pagadoAt||0)).map(oblCard).join("")}</div>`:""}
+    <div class="note" style="margin-top:10px">Las obligaciones mensuales y quincenales se crean solas para el siguiente periodo cuando marcas la actual como pagada.</div>`}
+   <button class="btn ghost" data-fin="xls" style="margin-top:14px">Exportar compras y obligaciones (Excel)</button>`;
+}
+function oblCard(o){
+  const d=daysTo(o.vence);
+  const col=o.pagado?"var(--green)":d<0?"var(--red)":d<=7?"var(--amber)":"var(--muted)";
+  const est=o.pagado?`Pagado ${o.pagadoAt?new Date(o.pagadoAt).toLocaleDateString("es-PE",{day:"numeric",month:"short"}):""}${o.metodo?" · "+o.metodo:""}`:d<0?`Vencido hace ${-d} día${d===-1?"":"s"}`:d===0?"Vence hoy":`Vence en ${d} día${d===1?"":"s"}`;
+  return`<article class="fincard" style="border-left:5px solid ${col};${o.pagado?"opacity:.7":""}">
+    <div class="rkh"><span class="rkn">${esc(o.n)}</span><b class="num">${money(o.monto)}</b></div>
+    <div class="meta">${esc(o.tipo)} · vence ${ymdToDate(o.vence).toLocaleDateString("es-PE",{day:"numeric",month:"short"})}</div>
+    <div class="rkh"><span style="font-size:12px;font-weight:800;color:${col}">${est}</span>
+     <span style="display:flex;gap:6px">${o.pagado?`<button class="linkbtn" data-fin="unpay" data-id="${o.id}">Deshacer</button>`:`<button class="linkbtn danger" data-fin="delObl" data-id="${o.id}">Borrar</button><button class="paybtn" data-fin="pay" data-id="${o.id}">Pagar</button>`}</span></div>
+    ${S.finConfirm==="o:"+o.id?`<div class="confirm">¿Borrar "${esc(o.n)}"? <button class="y" data-fin="delOblOk" data-id="${o.id}">Sí, borrar</button><button class="n" data-fin="cancelDel">No</button></div>`:""}
+  </article>`;
+}
+function sheet(html){const m=$("#modal");m.innerHTML=`<div class="modal" id="mbg"><div class="sheet" role="dialog" aria-modal="true" style="max-height:92%;overflow-y:auto">${html}</div></div>`;$("#mbg").onclick=e=>{if(e.target.id==="mbg")m.innerHTML=""};return m}
+function chipsHtml(list,cur,attr){return`<div class="chips" style="margin-bottom:10px">${list.map(x=>`<button type="button" data-${attr}="${esc(x)}" aria-pressed="${cur===x}">${esc(x)}</button>`).join("")}</div>`}
+function openCompraForm(){
+  const f={rubro:"Frutas",prod:"",cant:"",und:"kg",total:"",prov:"",pago:"Efectivo",comp:"Ninguno",vence:addDaysYmd(dayKey(Date.now()),15)};
+  const draw=()=>{
+    const m=sheet(`<h3>Registrar compra</h3><p>Se descuenta del resumen del mes.</p>
+      <div class="cjsub" style="margin-top:0">Rubro</div>${chipsHtml(RUBROS,f.rubro,"rub")}
+      <div class="fields">
+       <label class="f full"><span>Producto</span><input id="cp-prod" value="${esc(f.prod)}" placeholder="Ej. Fresa" maxlength="60"></label>
+       <label class="f"><span>Cantidad</span><input id="cp-cant" inputmode="decimal" value="${esc(f.cant)}" placeholder="5"></label>
+       <label class="f"><span>Unidad</span><input id="cp-und" value="${esc(f.und)}" placeholder="kg, und, latas"></label>
+       <label class="f"><span>Total pagado (S/)</span><input id="cp-total" inputmode="decimal" value="${esc(f.total)}" placeholder="0.00"></label>
+       <label class="f"><span>Proveedor</span><input id="cp-prov" value="${esc(f.prov)}" placeholder="Ej. Mercado" maxlength="60"></label>
+      </div>
+      <div class="cjsub">Cómo se pagó</div>${chipsHtml(PAGOS_COMPRA,f.pago,"pg")}
+      ${f.pago==="Crédito"?`<label class="f" style="margin-bottom:10px"><span>Vence el pago</span><input id="cp-vence" type="date" value="${f.vence}"></label><div class="note" style="margin:-4px 0 10px">Se creará en "Por pagar".</div>`:""}
+      <div class="cjsub" style="margin-top:0">Comprobante</div>${chipsHtml(["Ninguno","Boleta","Factura"],f.comp,"cpb")}
+      <div class="row"><button class="btn ghost" id="cp-x">Cancelar</button><button class="btn primary" id="cp-ok">Guardar compra</button></div>`);
+    const keep=()=>{["prod","cant","und","total","prov"].forEach(k=>{const el=$("#cp-"+k);if(el)f[k]=el.value});const v=$("#cp-vence");if(v)f.vence=v.value||f.vence};
+    m.querySelectorAll("[data-rub]").forEach(b=>b.onclick=()=>{keep();f.rubro=b.dataset.rub;draw()});
+    m.querySelectorAll("[data-pg]").forEach(b=>b.onclick=()=>{keep();f.pago=b.dataset.pg;draw()});
+    m.querySelectorAll("[data-cpb]").forEach(b=>b.onclick=()=>{keep();f.comp=b.dataset.cpb;draw()});
+    $("#cp-x").onclick=()=>m.innerHTML="";
+    $("#cp-ok").onclick=async()=>{
+      keep();const total=r2(parseFloat(f.total)||0),cant=parseFloat(f.cant)||1;
+      if(!f.prod.trim()){toast("Escribe el producto");return}
+      if(!(total>0)){toast("Escribe el total");return}
+      $("#cp-ok").disabled=true;
+      try{
+        const ref=fdb.collection("compras").doc();
+        const data={fecha:Date.now(),rubro:f.rubro,prod:f.prod.trim(),cant,und:(f.und||"und").trim(),total,prov:f.prov.trim(),pago:f.pago,comprobante:f.comp,por:S.session?.nombre||""};
+        const batch=fdb.batch();
+        if(f.pago==="Crédito"){const ob=fdb.collection("obligaciones").doc();data.obligacionId=ob.id;
+          batch.set(ob,{n:(data.prov||"Proveedor")+" · "+data.prod,tipo:"Compra a crédito",monto:total,vence:f.vence,pagado:false,compraId:ref.id,creado:Date.now()})}
+        batch.set(ref,data);await batch.commit();
+        m.innerHTML="";toast("Compra registrada");
+      }catch(e){toast(fbErr(e));const b=$("#cp-ok");if(b)b.disabled=false}
+    };
+  };draw();
+}
+function openOblForm(){
+  const f={n:"",monto:"",vence:addDaysYmd(dayKey(Date.now()),7),tipo:"Mensual"};
+  const draw=()=>{
+    const m=sheet(`<h3>Nueva obligación</h3><p>Algo que el negocio tiene que pagar.</p>
+      <div class="fields">
+       <label class="f full"><span>Concepto</span><input id="ob-n" value="${esc(f.n)}" placeholder="Ej. Alquiler del local, Luz, Agua" maxlength="60"></label>
+       <label class="f"><span>Monto (S/)</span><input id="ob-monto" inputmode="decimal" value="${esc(f.monto)}" placeholder="0.00"></label>
+       <label class="f"><span>Vence</span><input id="ob-vence" type="date" value="${f.vence}"></label>
+      </div>
+      <div class="cjsub">Se repite</div>${chipsHtml(TIPOS_OBL,f.tipo,"tp")}
+      <div class="row"><button class="btn ghost" id="ob-x">Cancelar</button><button class="btn primary" id="ob-ok">Guardar</button></div>`);
+    const keep=()=>{f.n=$("#ob-n").value;f.monto=$("#ob-monto").value;f.vence=$("#ob-vence").value||f.vence};
+    m.querySelectorAll("[data-tp]").forEach(b=>b.onclick=()=>{keep();f.tipo=b.dataset.tp;draw()});
+    $("#ob-x").onclick=()=>m.innerHTML="";
+    $("#ob-ok").onclick=async()=>{
+      keep();const monto=r2(parseFloat(f.monto)||0);
+      if(!f.n.trim()){toast("Escribe el concepto");return}
+      if(!(monto>0)){toast("Escribe el monto");return}
+      $("#ob-ok").disabled=true;
+      try{await fdb.collection("obligaciones").add({n:f.n.trim(),tipo:f.tipo,monto,vence:f.vence,pagado:false,creado:Date.now()});m.innerHTML="";toast("Obligación guardada")}
+      catch(e){toast(fbErr(e));const b=$("#ob-ok");if(b)b.disabled=false}
+    };
+  };draw();
+}
+function openPagarObl(id){
+  const o=S.obligs.find(x=>x.id===id);if(!o)return;let met="Efectivo",monto=String(o.monto);
+  const draw=()=>{
+    const m=sheet(`<h3>Pagar · ${esc(o.n)}</h3><p>${esc(o.tipo)} · vence ${ymdToDate(o.vence).toLocaleDateString("es-PE",{day:"numeric",month:"long"})}</p>
+      <label class="f" style="margin-bottom:10px"><span>Monto pagado (S/)</span><input id="py-monto" inputmode="decimal" value="${esc(monto)}"></label>
+      <div class="cjsub" style="margin-top:0">Con qué se pagó</div>${chipsHtml(["Efectivo","Yape","Plin","Transferencia"],met,"mt")}
+      ${o.tipo==="Mensual"||o.tipo==="Quincenal"?`<div class="note" style="margin:-4px 0 10px">Se creará la siguiente para el ${ymdToDate(o.tipo==="Mensual"?addMonthYmd(o.vence):addDaysYmd(o.vence,15)).toLocaleDateString("es-PE",{day:"numeric",month:"long"})}.</div>`:""}
+      <div class="row"><button class="btn ghost" id="py-x">Cancelar</button><button class="btn primary" id="py-ok">Marcar como pagado</button></div>`);
+    m.querySelectorAll("[data-mt]").forEach(b=>b.onclick=()=>{monto=$("#py-monto").value;met=b.dataset.mt;draw()});
+    $("#py-x").onclick=()=>m.innerHTML="";
+    $("#py-ok").onclick=async()=>{
+      const v=r2(parseFloat($("#py-monto").value)||0);if(!(v>0)){toast("Escribe el monto");return}
+      $("#py-ok").disabled=true;
+      try{
+        const batch=fdb.batch(),upd={pagado:true,pagadoAt:Date.now(),metodo:met,monto:v,pagadoPor:S.session?.nombre||""};
+        if((o.tipo==="Mensual"||o.tipo==="Quincenal")&&!o.siguienteId){
+          const nx=fdb.collection("obligaciones").doc();upd.siguienteId=nx.id;
+          batch.set(nx,{n:o.n,tipo:o.tipo,monto:o.monto,vence:o.tipo==="Mensual"?addMonthYmd(o.vence):addDaysYmd(o.vence,15),pagado:false,creado:Date.now()});
+        }
+        batch.update(fdb.collection("obligaciones").doc(o.id),upd);
+        await batch.commit();m.innerHTML="";toast("Pagado: "+o.n);
+      }catch(e){toast(fbErr(e));const b=$("#py-ok");if(b)b.disabled=false}
+    };
+  };draw();
+}
+async function finClick(d){
+  const k=d.fin;
+  if(k==="nuevaCompra")return openCompraForm();
+  if(k==="nuevaObl")return openOblForm();
+  if(k==="pay")return openPagarObl(d.id);
+  if(k==="cancelDel"){S.finConfirm=null;render();return}
+  if(k==="delCompra"){S.finConfirm="c:"+d.id;render();return}
+  if(k==="delObl"){S.finConfirm="o:"+d.id;render();return}
+  try{
+    if(k==="delCompraOk"){S.finConfirm=null;const c=S.compras.find(x=>x.id===d.id);const b=fdb.batch();b.delete(fdb.collection("compras").doc(d.id));
+      if(c&&c.obligacionId){const ob=S.obligs.find(x=>x.id===c.obligacionId);if(ob&&!ob.pagado)b.delete(fdb.collection("obligaciones").doc(c.obligacionId))}
+      await b.commit();toast("Compra borrada");return}
+    if(k==="delOblOk"){S.finConfirm=null;await fdb.collection("obligaciones").doc(d.id).delete();toast("Obligación borrada");return}
+    if(k==="unpay"){await fdb.collection("obligaciones").doc(d.id).update({pagado:false,pagadoAt:0,metodo:""});toast("Marcado como pendiente");return}
+  }catch(e){toast(fbErr(e))}
+  if(k==="xls")return exportFinanzas();
+}
+function exportFinanzas(){
+  if(!window.XLSX){toast("No se pudo cargar el exportador");return}
+  const off=S.finMes||0,c=finCalc(off),wb=XLSX.utils.book_new();
+  const ws1=XLSX.utils.json_to_sheet(c.comprasMes.map(x=>({"Fecha":new Date(x.fecha).toLocaleDateString("es-PE"),"Rubro":x.rubro,"Producto":x.prod,"Cantidad":x.cant,"Unidad":x.und,"Total (S/)":x.total,"Precio unit. (S/)":x.cant?Math.round(x.total/x.cant*100)/100:"","Proveedor":x.prov,"Pago":x.pago,"Comprobante":x.comprobante||"","Registró":x.por||""})));
+  ws1["!cols"]=[{wch:11},{wch:13},{wch:26},{wch:9},{wch:8},{wch:11},{wch:13},{wch:22},{wch:13},{wch:12},{wch:12}];
+  XLSX.utils.book_append_sheet(wb,ws1,"Compras");
+  const obls=S.obligs.filter(o=>!o.pagado||(o.pagadoAt>=c.a&&o.pagadoAt<c.b));
+  const ws2=XLSX.utils.json_to_sheet(obls.map(o=>({"Concepto":o.n,"Tipo":o.tipo,"Monto (S/)":o.monto,"Vence":o.vence,"Estado":o.pagado?"Pagado":"Pendiente","Pagado el":o.pagadoAt?new Date(o.pagadoAt).toLocaleDateString("es-PE"):"","Método":o.metodo||""})));
+  ws2["!cols"]=[{wch:28},{wch:16},{wch:11},{wch:11},{wch:10},{wch:11},{wch:13}];
+  XLSX.utils.book_append_sheet(wb,ws2,"Obligaciones");
+  const ws3=XLSX.utils.json_to_sheet([{"Concepto":"Ventas cobradas","S/":r2(c.ventas)},{"Concepto":"Compras pagadas","S/":-r2(c.comprasContado)},{"Concepto":"Obligaciones pagadas","S/":-r2(c.oblPagadas)},{"Concepto":"Queda","S/":r2(c.queda)},{"Concepto":"Compras a crédito (por pagar)","S/":r2(c.sumCredito)},{"Concepto":"Aún por pagar del mes","S/":r2(c.pendMes)}]);
+  ws3["!cols"]=[{wch:30},{wch:12}];XLSX.utils.book_append_sheet(wb,ws3,"Resumen");
+  const d=mesRange(off)[2];
+  try{XLSX.writeFile(wb,`finanzas_${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}.xlsx`);toast("Excel descargado")}catch(e){toast("No se pudo descargar el Excel")}
 }
 
 /* ===================== COBRO / VUELTO ===================== */
@@ -1122,11 +1364,12 @@ function render(){
   const active=S.orders.filter(o=>dayKey(o.createdAt)===dayKey(Date.now())&&ACTIVOS.includes(o.estado)&&(!S.delivery||o.tipo==="Delivery")).length;
   const nItems=S.cart.reduce((a,l)=>a+l.q,0);
   const b1=$("#badge");b1.textContent=active;b1.hidden=!active;
+  if(S.owner){const bf=$("#badge-fin"),n=(S.obligs||[]).filter(o=>!o.pagado&&daysTo(o.vence)<=7).length;bf.textContent=n;bf.hidden=!n}
   const b2=$("#badge-cart");b2.textContent=nItems;b2.hidden=!nItems;
   const app=$("#app"),st=app.scrollTop;
   const focusId=document.activeElement?.id,selS=document.activeElement?.selectionStart;
   if(!S.session){app.innerHTML="";return}
-  app.innerHTML=S.view==="carta"?renderCarta():S.view==="pedido"?renderPedido():S.view==="equipo"?renderEquipo():S.view==="ventas"?renderVentas():renderPedidos();
+  app.innerHTML=S.view==="carta"?renderCarta():S.view==="pedido"?renderPedido():S.view==="equipo"?renderEquipo():S.view==="ventas"?renderVentas():S.view==="finanzas"?renderFinanzas():renderPedidos();
   app.scrollTop=st;
   if(focusId){const el=document.getElementById(focusId);if(el&&el.tagName!=="BUTTON"&&app.contains(el)){el.focus({preventScroll:true});try{if(selS!=null)el.setSelectionRange(selS,selS)}catch(e){}}}
   const bar=$("#bar");
@@ -1142,6 +1385,7 @@ $("#app").addEventListener("click",e=>{
   const b=e.target.closest("button");if(!b)return;
   const d=b.dataset;
   if(d.goto){setView(d.goto);return}
+  if(d.fin&&S.owner){finClick(d);return}
   if(d.extra){openExtra(d.extra);return}
   if(d.cat){S.cat=d.cat;render();$("#app").scrollTop=0;return}
   if(d.acc){if(!S.open)S.open=new Set();const id=d.acc,was=S.open.has(id);was?S.open.delete(id):S.open.add(id);render();
@@ -1157,7 +1401,7 @@ $("#app").addEventListener("click",e=>{
   if(d.inc!=null){S.cart[+d.inc].q++;render();return}
   if(d.dec!=null){const l=S.cart[+d.dec];l.q--;if(l.q<=0)S.cart.splice(+d.dec,1);render();return}
   const seg=b.closest("[data-seg]");
-  if(seg&&d.v){if(seg.dataset.seg==="tipo")S.form.tipo=d.v;else if(seg.dataset.seg==="rol")S.acctForm.rol=d.v;else if(seg.dataset.seg==="desp"){S.despTab=d.v;render();$("#app").scrollTop=0;return}else if(seg.dataset.seg==="ven"){S.venTab=d.v;render();$("#app").scrollTop=0;return}else if(seg.dataset.seg==="dlv"){S.dlvTab=d.v;render();$("#app").scrollTop=0;return}else S.filter=d.v;render();return}
+  if(seg&&d.v){if(seg.dataset.seg==="tipo")S.form.tipo=d.v;else if(seg.dataset.seg==="rol")S.acctForm.rol=d.v;else if(seg.dataset.seg==="desp"){S.despTab=d.v;render();$("#app").scrollTop=0;return}else if(seg.dataset.seg==="fin"){S.finTab=d.v;S.finConfirm=null;render();$("#app").scrollTop=0;return}else if(seg.dataset.seg==="ven"){S.venTab=d.v;render();$("#app").scrollTop=0;return}else if(seg.dataset.seg==="dlv"){S.dlvTab=d.v;render();$("#app").scrollTop=0;return}else S.filter=d.v;render();return}
   if(d.acctDel&&S.owner){S.confirmDel="acct:"+d.acctDel;render();return}
   if(d.acctYes&&S.owner){S.confirmDel=null;setActive(d.acctYes,false).then(()=>{toast("Usuario desactivado");loadAccounts()}).catch(e=>toast(fbErr(e)));return}
   if(d.acctOn&&S.owner){setActive(d.acctOn,true).then(()=>{toast("Usuario reactivado");loadAccounts()}).catch(e=>toast(fbErr(e)));return}
@@ -1202,6 +1446,7 @@ $("#app").addEventListener("submit",async e=>{
 $("#app").addEventListener("change",e=>{
   const t=e.target;
   if(t.id==="range"){S.range=t.value;if(t.value==="dia"&&!S.rangeDay)S.rangeDay=dayKey(dayOffset(1));render();return}
+  if(t.id==="finMes"){S.finMes=+t.value;render();return}
   if(t.id==="rangeDay"){S.rangeDay=t.value||dayKey(Date.now());render();return}
   if(t.dataset.f==="pago"||t.dataset.f==="metodo"){S.form[t.dataset.f]=t.value;render()}
 });
@@ -1210,7 +1455,7 @@ render();
 S.gateMode="loading";renderGate();
 boot();setInterval(()=>{if(S.view==="pedidos")render()},60000);
 /* aviso de nueva versión */
-const APP_VERSION="2026-09-27b";
+const APP_VERSION="2026-10-01a";
 async function checkVersion(){
   try{const t=await fetch(location.pathname+"?nc="+Date.now(),{cache:"no-store"}).then(r=>r.text());
     const m=t.match(/APP_VERSION="([^"]+)"/);
