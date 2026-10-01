@@ -461,7 +461,7 @@ function enter(acct){
   $("#phone").style.setProperty("--tabs",S.owner?5:S.delivery?1:3);
   $("#tab-carta").hidden=S.delivery;$("#tab-pedido").hidden=S.delivery||S.owner;
   const lbl=document.getElementById("lbl-pedidos");if(lbl)lbl.textContent=S.delivery?"Mis deliverys":S.owner||S.cocina?"Pedidos":"Despacho";
-  subscribeOrders();subscribeDisp();if(S.owner){subscribeFin();subscribeDeud()}
+  subscribeOrders();subscribeDisp();if(S.owner){subscribeFin();subscribeDeud();subscribePer()}
   if(S.owner)loadAccounts();
   S.view=S.delivery?"pedidos":"carta";document.querySelectorAll("nav.bottom button").forEach(b=>b.setAttribute("aria-selected",b.dataset.view===S.view));
   renderMe(true);render();
@@ -470,7 +470,7 @@ function enter(acct){
 }
 async function logout(){
   if(unsubOrders){unsubOrders();unsubOrders=null}
-  if(unsubDisp){unsubDisp();unsubDisp=null}S.dispEdit=false;unsubscribeFin();unsubscribeDeud();
+  if(unsubDisp){unsubDisp();unsubDisp=null}S.dispEdit=false;unsubscribeFin();unsubscribeDeud();unsubscribePer();
   S.session=null;S.owner=false;S.cocina=false;S.delivery=false;S.despTab="despachar";S.orders=[];S.accounts=[];S.cart=[];S.form=blankForm();S.editing=null;S.addTo=null;
   $("#modal").innerHTML="";S.gateMode="login";S.gateMsg=null;
   try{await auth.signOut()}catch(e){}
@@ -696,7 +696,7 @@ function renderCaja(){
     </div>
     <div class="cjrows">${digs.map(m=>`<div><span>${m}</span><b class="num">${money(by[m]||0)}</b></div>`).join("")}</div>
     ${Object.keys(per).length?`<div class="cjsub">Efectivo por persona (para cuadrar)</div><div class="cjrows">${Object.entries(per).sort((a,b)=>b[1]-a[1]).map(([k,v])=>`<div><span>${esc(k)}</span><b class="num">${money(v)}</b></div>`).join("")}</div>`:""}
-    ${(()=>{const cs=(S.compras||[]).filter(x=>x.pago==="Efectivo"&&inRange({createdAt:x.fecha})).reduce((a,x)=>a+x.total,0),os=(S.obligs||[]).filter(o=>o.pagado&&o.metodo==="Efectivo"&&o.pagadoAt&&inRange({createdAt:o.pagadoAt})).reduce((a,o)=>a+o.monto,0);const ab=(S.deudores||[]).reduce((t,x)=>t+(x.abonos||[]).filter(b=>b.metodo==="Efectivo"&&inRange({createdAt:b.at})).reduce((u,b)=>u+b.monto,0),0);return cs+os+ab>0?`${ab>0?`<div class="cjsub">Entradas de efectivo</div><div class="cjrows"><div><span>Abonos de deudas</span><b class="num">+ ${money(ab)}</b></div></div>`:""}<div class="cjsub">Salidas de efectivo</div><div class="cjrows"><div><span>Compras en efectivo</span><b class="num">− ${money(cs)}</b></div><div><span>Obligaciones en efectivo</span><b class="num">− ${money(os)}</b></div><div style="border-top:1px dashed var(--line);padding-top:4px"><span><b>Efectivo que debería haber</b></span><b class="num">${money(efe+ab-cs-os)}</b></div></div>`:""})()}
+    ${(()=>{const cs=(S.compras||[]).filter(x=>x.pago==="Efectivo"&&inRange({createdAt:x.fecha})).reduce((a,x)=>a+x.total,0),os=(S.obligs||[]).filter(o=>o.pagado&&o.metodo==="Efectivo"&&o.pagadoAt&&inRange({createdAt:o.pagadoAt})).reduce((a,o)=>a+o.monto,0);const ab=(S.deudores||[]).reduce((t,x)=>t+(x.abonos||[]).filter(b=>b.metodo==="Efectivo"&&inRange({createdAt:b.at})).reduce((u,b)=>u+b.monto,0),0);const rm=(S.remus||[]).filter(r=>r.metodo==="Efectivo"&&inRange({createdAt:r.at})).reduce((t,r)=>t+r.neto,0)+(S.personal||[]).reduce((t,w)=>t+(w.adelantos||[]).filter(a=>a.metodo==="Efectivo"&&inRange({createdAt:a.at})).reduce((u,a)=>u+a.monto,0),0);return cs+os+ab+rm>0?`${ab>0?`<div class="cjsub">Entradas de efectivo</div><div class="cjrows"><div><span>Abonos de deudas</span><b class="num">+ ${money(ab)}</b></div></div>`:""}<div class="cjsub">Salidas de efectivo</div><div class="cjrows"><div><span>Compras en efectivo</span><b class="num">− ${money(cs)}</b></div><div><span>Obligaciones en efectivo</span><b class="num">− ${money(os)}</b></div>${rm>0?`<div><span>Pagos al personal</span><b class="num">− ${money(rm)}</b></div>`:""}<div style="border-top:1px dashed var(--line);padding-top:4px"><span><b>Efectivo que debería haber</b></span><b class="num">${money(efe+ab-cs-os-rm)}</b></div></div>`:""})()}
     <div class="cjrows" style="margin-top:10px;border-top:1.5px solid var(--ink);padding-top:8px"><div><span>Total cobrado</span><b class="num">${money(efe+dig)}</b></div><div><span>Por cobrar</span><b class="num" style="color:${vta-efe-dig>0.001?"var(--red)":"inherit"}">${money(Math.max(vta-efe-dig,0))}</b></div></div>`};
 }
 function openCaja(){
@@ -744,7 +744,8 @@ function finCalc(off){
   const rub={};comprasMes.forEach(c=>rub[c.rubro]=(rub[c.rubro]||0)+c.total);
   let abonos=0;(S.deudores||[]).forEach(x=>(x.abonos||[]).forEach(b=>{if(inM(b.at))abonos+=b.monto||0}));
   const nosDeben=(S.deudores||[]).reduce((t,x)=>t+saldoDe(x),0);
-  return{ventas,abonos,nosDeben,sumCompras,sumCredito,comprasContado,oblPagadas,queda:ventas+abonos-comprasContado-oblPagadas,
+  const rem=remCalc(off).total;
+  return{ventas,abonos,nosDeben,sumCompras,sumCredito,comprasContado,oblPagadas,rem,queda:ventas+abonos-comprasContado-oblPagadas-rem,
     pendMes:pendMes.reduce((x,o)=>x+o.monto,0),comprasMes,rub,pagadasMes,a,b};
 }
 function renderFinanzas(){
@@ -754,6 +755,7 @@ function renderFinanzas(){
   const venc=pend.filter(o=>daysTo(o.vence)<0),sem=pend.filter(o=>{const d=daysTo(o.vence);return d>=0&&d<=7});
   const alert=venc.length+sem.length;
   const debAlert=(S.deudores||[]).filter(x=>{const p=proxCuota(x);return saldoDe(x)>0.001&&p&&p.dias<=0}).length;
+  const perAlert=0;
   const rubs=Object.entries(c.rub).sort((x,y)=>y[1]-x[1]),rmax=rubs.length?rubs[0][1]:1;
   return`<div class="h2"><span>Finanzas</span>
      <select id="finMes" aria-label="Mes" style="font-size:13px;padding:6px 8px;border-radius:9px;border:1px solid var(--line);background:var(--surface);font-weight:800">
@@ -764,16 +766,18 @@ function renderFinanzas(){
     <div><span>− Compras pagadas</span><b class="num">${money(c.comprasContado)}</b></div>
     ${c.abonos>0?`<div><span>+ Abonos de deudas</span><b class="num">${money(c.abonos)}</b></div>`:""}
     <div><span>− Obligaciones pagadas</span><b class="num">${money(c.oblPagadas)}</b></div>
+    ${c.rem>0?`<div><span>− Remuneraciones y adelantos</span><b class="num">${money(c.rem)}</b></div>`:""}
     <div class="ln"></div>
     <div class="big"><span>Queda</span><b class="num">${money(c.queda)}</b></div>
     <div class="sm">Aún por pagar ${off===0?"este mes":"de ese mes"}: <b class="num">${money(c.pendMes)}</b></div>
     ${c.nosDeben>0?`<div class="sm">Te deben en total: <b class="num">${money(c.nosDeben)}</b></div>`:""}
    </div>
-   <div class="seg" data-seg="fin" style="margin:12px 0 10px">
+   <div class="seg" data-seg="fin" style="margin:12px 0 10px;display:grid;grid-template-columns:1fr 1fr">
     <button data-v="compras" aria-pressed="${tab==="compras"}">Compras</button>
     <button data-v="pagar" aria-pressed="${tab==="pagar"}">Por pagar${alert?` <span class="finbadge num">${alert}</span>`:""}</button>
-    <button data-v="deben" aria-pressed="${tab==="deben"}">Nos deben${debAlert?` <span class="finbadge num">${debAlert}</span>`:""}</button></div>
-   ${tab==="deben"?renderNosDeben():tab==="compras"?`
+    <button data-v="deben" aria-pressed="${tab==="deben"}">Nos deben${debAlert?` <span class="finbadge num">${debAlert}</span>`:""}</button>
+    <button data-v="personal" aria-pressed="${tab==="personal"}">Personal${perAlert?` <span class="finbadge num">${perAlert}</span>`:""}</button></div>
+   ${tab==="personal"?renderPersonal():tab==="deben"?renderNosDeben():tab==="compras"?`
     <div class="kpis" style="margin-top:0">
      <div class="kpi"><div class="k">Compras del mes</div><div class="v num">${money(c.sumCompras)}</div></div>
      <div class="kpi"><div class="k">A crédito</div><div class="v num" style="color:${c.sumCredito>0?"var(--red)":"inherit"}">${money(c.sumCredito)}</div></div>
@@ -911,6 +915,13 @@ async function finClick(d){
   if(k==="debToggle"){S.debOpen=S.debOpen===d.id?null:d.id;S.finConfirm=null;render();return}
   if(k==="delDeud"){S.finConfirm="d:"+d.id;render();return}
   if(k==="cancelDel"){S.finConfirm=null;render();return}
+  if(k==="perNuevo")return openPerForm();
+  if(k==="perEdit")return openPerForm(d.id);
+  if(k==="perPagar")return openPagoPersonal(d.id);
+  if(k==="perAdel")return openAdelanto(d.id);
+  if(k==="perDia")return openPagoDia();
+  if(k==="perToggle"){S.perOpen=S.perOpen===d.id?null:d.id;render();return}
+  if(k==="perAct"){const w=S.personal.find(x=>x.id===d.id);if(!w)return;try{await fdb.collection("personal").doc(w.id).update({activo:w.activo===false});toast(w.activo===false?"Trabajador reactivado":"Trabajador desactivado")}catch(e){toast(fbErr(e))}return}
   if(k==="delCompra"){S.finConfirm="c:"+d.id;render();return}
   if(k==="delObl"){S.finConfirm="o:"+d.id;render();return}
   try{
@@ -937,7 +948,12 @@ function exportFinanzas(){
   wsD["!cols"]=[{wch:22},{wch:12},{wch:24},{wch:11},{wch:10},{wch:11},{wch:10},{wch:7},{wch:13},{wch:15}];XLSX.utils.book_append_sheet(wb,wsD,"Nos deben");
   const ab=[];(S.deudores||[]).forEach(x=>(x.abonos||[]).forEach(b=>ab.push({"Fecha":new Date(b.at).toLocaleDateString("es-PE"),"Persona":x.n,"Monto (S/)":b.monto,"Método":b.metodo,"Registró":b.por||"","Nota":b.nota||""})));
   const wsA=XLSX.utils.json_to_sheet(ab);wsA["!cols"]=[{wch:11},{wch:22},{wch:10},{wch:13},{wch:12},{wch:24}];XLSX.utils.book_append_sheet(wb,wsA,"Abonos");
-  const ws3=XLSX.utils.json_to_sheet([{"Concepto":"Ventas cobradas","S/":r2(c.ventas)},{"Concepto":"Compras pagadas","S/":-r2(c.comprasContado)},{"Concepto":"Abonos de deudas cobrados","S/":r2(c.abonos)},{"Concepto":"Obligaciones pagadas","S/":-r2(c.oblPagadas)},{"Concepto":"Queda","S/":r2(c.queda)},{"Concepto":"Compras a crédito (por pagar)","S/":r2(c.sumCredito)},{"Concepto":"Aún por pagar del mes","S/":r2(c.pendMes)}]);
+  const wsP=XLSX.utils.json_to_sheet(S.personal.map(w=>({"Nombre":w.nombre,"Cargo":w.cargo||"","Celular":w.telefono||"","Pago por día (S/)":pagoDia(w),"Horas jornada":jornadaH(w),"Pago por hora (S/)":pagoHora(w),"Inicio":w.inicio||"","Estado":w.activo===false?"Inactivo":"Activo","Adelantos por descontar (S/)":adelPendSum(w)})));
+  wsP["!cols"]=[{wch:22},{wch:14},{wch:12},{wch:14},{wch:12},{wch:15},{wch:11},{wch:9},{wch:22}];XLSX.utils.book_append_sheet(wb,wsP,"Personal");
+  const rr=[];S.remus.filter(r=>r.at>=c.a&&r.at<c.b).forEach(r=>rr.push({"Fecha":new Date(r.at).toLocaleDateString("es-PE"),"Tipo":"Pago","Trabajador":r.nombre,"Día trabajado":r.fecha||r.hasta,"Horas":r.horas!=null?r.horas:"","Jornada (S/)":r.base,"Horas extra (S/)":r.extra||0,"Bonos (S/)":r.bonos||0,"Adelantos desc. (S/)":r.adelantos||0,"Otros desc. (S/)":r.descuentos||0,"Neto pagado (S/)":r.neto,"Método":r.metodo,"Nota":r.nota||""}));
+  S.personal.forEach(w=>(w.adelantos||[]).filter(a=>a.at>=c.a&&a.at<c.b).forEach(a=>rr.push({"Fecha":new Date(a.at).toLocaleDateString("es-PE"),"Tipo":"Adelanto","Trabajador":w.nombre,"Día trabajado":"","Horas":"","Jornada (S/)":"","Horas extra (S/)":"","Bonos (S/)":"","Adelantos desc. (S/)":"","Otros desc. (S/)":"","Neto pagado (S/)":a.monto,"Método":a.metodo,"Nota":a.nota||""})));
+  const wsR=XLSX.utils.json_to_sheet(rr);wsR["!cols"]=[{wch:11},{wch:9},{wch:22},{wch:12},{wch:7},{wch:11},{wch:13},{wch:9},{wch:9},{wch:12},{wch:11},{wch:13},{wch:12},{wch:20}];XLSX.utils.book_append_sheet(wb,wsR,"Remuneraciones");
+  const ws3=XLSX.utils.json_to_sheet([{"Concepto":"Ventas cobradas","S/":r2(c.ventas)},{"Concepto":"Compras pagadas","S/":-r2(c.comprasContado)},{"Concepto":"Abonos de deudas cobrados","S/":r2(c.abonos)},{"Concepto":"Obligaciones pagadas","S/":-r2(c.oblPagadas)},{"Concepto":"Remuneraciones y adelantos","S/":-r2(c.rem)},{"Concepto":"Queda","S/":r2(c.queda)},{"Concepto":"Compras a crédito (por pagar)","S/":r2(c.sumCredito)},{"Concepto":"Aún por pagar del mes","S/":r2(c.pendMes)}]);
   ws3["!cols"]=[{wch:30},{wch:12}];XLSX.utils.book_append_sheet(wb,ws3,"Resumen");
   const d=mesRange(off)[2];
   try{XLSX.writeFile(wb,`finanzas_${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}.xlsx`);toast("Excel descargado")}catch(e){toast("No se pudo descargar el Excel")}
@@ -1080,6 +1096,235 @@ function openAbono(id){
       try{await fdb.collection("porCobrar").doc(x.id).update({abonos:[...(x.abonos||[]),{monto:val,metodo:met,at,nota:nota.trim(),por:S.session?.nombre||""}],actualizado:Date.now()});
         m.innerHTML="";toast(`Abono de ${money(val)} registrado${val>=sal-0.001?" · ¡deuda cancelada!":""}`)}
       catch(e){toast(fbErr(e));const b=$("#ab-ok");if(b)b.disabled=false}
+    };
+  };draw();
+}
+
+/* ===================== PERSONAL Y REMUNERACIONES (solo propietarios) ===================== */
+/* Pago diario: por jornada completa + horas extra, o por horas si la jornada fue incompleta. */
+S.personal=[];S.remus=[];S.perOpen=null;let unsubPer=null,unsubRem=null;
+const METS=["Efectivo","Yape","Plin","Transferencia"];
+function subscribePer(){
+  if(!S.owner)return;if(unsubPer)unsubPer();if(unsubRem)unsubRem();
+  unsubPer=fdb.collection("personal").orderBy("creado","asc").limit(100)
+    .onSnapshot(q=>{S.personal=q.docs.map(d=>({id:d.id,...d.data()}));if(S.view==="finanzas")render()},e=>{console.error(e);toast(fbErr(e))});
+  unsubRem=fdb.collection("remuneraciones").orderBy("at","desc").limit(1000)
+    .onSnapshot(q=>{S.remus=q.docs.map(d=>({id:d.id,...d.data()}));if(S.view==="finanzas")render()},e=>{console.error(e);toast(fbErr(e))});
+}
+function unsubscribePer(){if(unsubPer){unsubPer();unsubPer=null}if(unsubRem){unsubRem();unsubRem=null}S.personal=[];S.remus=[]}
+const adelPend=w=>(w.adelantos||[]).filter(a=>!a.descontado);
+const adelPendSum=w=>adelRestaSum(w);
+const pagosDe=w=>S.remus.filter(r=>r.personalId===w.id);
+const jornadaH=w=>w.horasJornada||8;
+const pagoDia=w=>w.pagoDia||w.sueldo||0;
+const pagoHora=w=>w.pagoHora||r2(pagoDia(w)/jornadaH(w));
+/* Monto por las horas trabajadas en un día */
+function montoHoras(w,h){
+  h=Math.max(0,parseFloat(h)||0);const J=jornadaH(w);
+  if(h>=J)return{base:pagoDia(w),extra:r2((h-J)*pagoHora(w)),total:r2(pagoDia(w)+(h-J)*pagoHora(w))};
+  return{base:r2(h*pagoHora(w)),extra:0,total:r2(h*pagoHora(w))};
+}
+const pagadoEl=(w,ymd)=>pagosDe(w).filter(r=>(r.fecha||r.hasta)===ymd);
+const fmtD=(s,o)=>ymdToDate(s).toLocaleDateString("es-PE",o||{day:"numeric",month:"short"});
+const fmtH=h=>{const n=Math.round(h*100)/100;return(n%1?n.toFixed(2).replace(/0$/,""):n)+" h"};
+function perCard(w){
+  const hoy=dayKey(Date.now()),ph=pagadoEl(w,hoy),ap=adelPendSum(w),open=S.perOpen===w.id;
+  const sem=addDaysYmd(hoy,-6),ult7=pagosDe(w).filter(r=>(r.fecha||r.hasta)>=sem);
+  const col=w.activo===false?"var(--grey)":ph.length?"var(--green)":"var(--amber)";
+  const est=w.activo===false?"Inactivo":ph.length?`Pagado hoy · ${money(ph.reduce((t,r)=>t+r.neto,0))} (${fmtH(ph.reduce((t,r)=>t+(r.horas||0),0))})`:"Aún no se le paga hoy";
+  const hist=[...pagosDe(w).map(r=>({t:"pago",at:r.at,r})),...(w.adelantos||[]).map(a=>({t:"adel",at:a.at,a}))].sort((a,b)=>b.at-a.at).slice(0,30);
+  return`<article class="fincard" style="border-left:5px solid ${col};${w.activo===false?"opacity:.6":""}">
+    <div class="rkh"><span class="rkn">${esc(w.nombre)}</span><b class="num">${money(pagoDia(w))}<small style="color:var(--muted);font-weight:700"> /día</small></b></div>
+    <div class="meta">${esc(w.cargo||"Personal")} · jornada ${fmtH(jornadaH(w))} · hora ${money(pagoHora(w))}</div>
+    <div class="rkh"><span style="font-size:12px;font-weight:800;color:${col}">${est}</span>${ap>0?`<span class="paytag half">Adelantos ${money(ap)}</span>`:""}</div>
+    ${ult7.length?`<div class="meta">Últimos 7 días: ${ult7.length} día${ult7.length>1?"s":""} · ${fmtH(ult7.reduce((t,r)=>t+(r.horas||0),0))} · ${money(ult7.reduce((t,r)=>t+r.neto,0))}</div>`:""}
+    ${open?`<div class="cron">
+      <div class="cjsub" style="margin-top:4px">Historial</div>
+      ${hist.length?hist.map(h=>h.t==="pago"?`<div class="cq pagada"><span>${fmtD(h.r.fecha||h.r.hasta,{weekday:"short",day:"numeric",month:"short"})} · ${h.r.horas!=null?fmtH(h.r.horas):"día"} · ${esc(h.r.metodo)}</span><b class="num">${money(h.r.neto)}</b><em>${h.r.extra?`Jornada ${money(h.r.base)} + extra ${money(h.r.extra)}`:`Base ${money(h.r.base)}`}${h.r.bonos?` + bono ${money(h.r.bonos)}`:""}${h.r.adelantos?` − adelanto ${money(h.r.adelantos)}`:""}${h.r.descuentos?` − desc. ${money(h.r.descuentos)}`:""}${h.r.nota?" · "+esc(h.r.nota):""}</em></div>`
+        :`<div class="cq ${h.a.descontado?"pendiente":"parcial"}"><span>${new Date(h.at).toLocaleDateString("es-PE",{day:"numeric",month:"short"})} · Adelanto · ${esc(h.a.metodo)}</span><b class="num">${money(h.a.monto)}</b><em>${h.a.descontado?"Ya descontado":`Por descontar${h.a.resta!=null&&h.a.resta<h.a.monto?` (falta ${money(h.a.resta)})`:""}`}${h.a.nota?" · "+esc(h.a.nota):""}</em></div>`).join(""):`<div class="meta">Aún no hay pagos ni adelantos.</div>`}
+      ${w.telefono?`<div class="meta">Celular: ${esc(w.telefono)}</div>`:""}
+      <div style="display:flex;justify-content:flex-end;gap:6px"><button class="linkbtn" data-fin="perEdit" data-id="${w.id}">Editar datos</button><button class="linkbtn ${w.activo===false?"":"danger"}" data-fin="perAct" data-id="${w.id}">${w.activo===false?"Reactivar":"Desactivar"}</button></div>
+    </div>`:""}
+    <div class="acts" style="grid-template-columns:repeat(auto-fit,minmax(90px,1fr))">
+      ${w.activo!==false?`<button class="adv" data-fin="perPagar" data-id="${w.id}" style="grid-column:auto">Pagar</button><button data-fin="perAdel" data-id="${w.id}">Adelanto</button>`:""}
+      <button data-fin="perToggle" data-id="${w.id}">${open?"Ocultar":"Historial"}</button>
+    </div>
+  </article>`;
+}
+function remCalc(off){
+  const [a,b]=mesRange(off),inM=t=>t>=a&&t<b;
+  const netos=S.remus.filter(r=>inM(r.at)).reduce((t,r)=>t+r.neto,0);
+  let adel=0;S.personal.forEach(w=>(w.adelantos||[]).forEach(x=>{if(inM(x.at))adel+=x.monto}));
+  return{netos:r2(netos),adel:r2(adel),total:r2(netos+adel)};
+}
+function renderPersonal(){
+  const off=S.finMes||0,rc=remCalc(off),act=S.personal.filter(w=>w.activo!==false),ina=S.personal.filter(w=>w.activo===false);
+  const hoy=dayKey(Date.now()),hoyR=S.remus.filter(r=>(r.fecha||r.hasta)===hoy);
+  const adelP=act.reduce((t,w)=>t+adelPendSum(w),0);
+  const faltan=act.filter(w=>!pagadoEl(w,hoy).length).length;
+  return`<div class="fin3">
+     <div class="n"><div class="k">Pagado hoy</div><div class="v num">${money(hoyR.reduce((t,r)=>t+r.neto,0))}</div></div>
+     <div class="n"><div class="k">Pagado ${esc(mesNombre(off).split(" ")[0])}</div><div class="v num">${money(rc.total)}</div></div>
+     <div class="a"><div class="k">Adelantos por descontar</div><div class="v num">${money(adelP)}</div></div>
+    </div>
+    ${act.length?`<button class="btn primary" data-fin="perDia" style="margin-top:12px">Pagar el día${faltan?` · faltan ${faltan}`:" ✓"}</button>`:""}
+    <button class="btn ${act.length?"ghost":"primary"}" data-fin="perNuevo" style="margin-top:8px">+ Agregar trabajador</button>
+    <div class="zcat">Equipo (${act.length})</div>
+    <div class="orders">${act.length?act.map(perCard).join(""):`<div class="empty">Agrega a tu personal para llevar sus pagos diarios.</div>`}</div>
+    ${ina.length?`<div class="zcat">Inactivos</div><div class="orders">${ina.map(perCard).join("")}</div>`:""}
+    <div class="note" style="margin-top:10px">Jornada completa = pago del día; cada hora adicional se paga a la tarifa por hora. Si trabaja menos horas, se paga solo las horas. Los adelantos se descuentan solos del siguiente pago.</div>`;
+}
+function openPerForm(id){
+  const w=id?S.personal.find(x=>x.id===id):null;
+  const f={nombre:w?.nombre||"",cargo:w?.cargo||"",dia:w?String(pagoDia(w)):"",jor:w?String(jornadaH(w)):"8",hora:w?.pagoHora?String(w.pagoHora):"",inicio:w?.inicio||dayKey(Date.now()),tel:w?.telefono||""};
+  const sug=()=>{const d=parseFloat($("#pe-s").value)||0,j=parseFloat($("#pe-j").value)||8;return d>0?r2(d/j):0};
+  const m=sheet(`<h3>${w?"Editar trabajador":"Agregar trabajador"}</h3><p>Solo los propietarios ven esta información.</p>
+      <div class="fields">
+       <label class="f full"><span>Nombre</span><input id="pe-n" value="${esc(f.nombre)}" maxlength="50"></label>
+       <label class="f"><span>Cargo</span><input id="pe-c" value="${esc(f.cargo)}" placeholder="Mesero, cocina…" maxlength="30"></label>
+       <label class="f"><span>Celular</span><input id="pe-t" inputmode="tel" value="${esc(f.tel)}" placeholder="9XX XXX XXX"></label>
+       <label class="f"><span>Pago por día (S/)</span><input id="pe-s" inputmode="decimal" value="${esc(f.dia)}" placeholder="0.00"></label>
+       <label class="f"><span>Horas de la jornada</span><input id="pe-j" inputmode="decimal" value="${esc(f.jor)}" placeholder="8"></label>
+       <label class="f"><span>Pago por hora (S/)</span><input id="pe-h" inputmode="decimal" value="${esc(f.hora)}" placeholder="auto"></label>
+       <label class="f"><span>Empezó el</span><input id="pe-i" type="date" value="${f.inicio}"></label>
+      </div>
+      <div class="note" id="pe-hint" style="margin-top:6px"></div>
+      <div class="row" style="margin-top:12px"><button class="btn ghost" id="pe-x">Cancelar</button><button class="btn primary" id="pe-ok">Guardar</button></div>`);
+  const hint=()=>{const s=sug(),h=parseFloat($("#pe-h").value)||0;$("#pe-hint").textContent=s?`La hora sale a ${money(h||s)}${h?"":" (pago del día ÷ horas)"}. Se usa para horas extra o días incompletos.`:"Pon cuánto gana por día y cuántas horas es su jornada."};
+  ["#pe-s","#pe-j","#pe-h"].forEach(s=>$(s).oninput=hint);hint();
+  $("#pe-x").onclick=()=>m.innerHTML="";
+  $("#pe-ok").onclick=async()=>{
+    const nombre=$("#pe-n").value.trim(),dia=r2(parseFloat($("#pe-s").value)||0),jor=parseFloat($("#pe-j").value)||8,hora=r2(parseFloat($("#pe-h").value)||0);
+    if(!nombre){toast("Escribe el nombre");return}
+    if(!(dia>0)){toast("Escribe el pago por día");return}
+    if(!(jor>0&&jor<=24)){toast("Revisa las horas de la jornada");return}
+    $("#pe-ok").disabled=true;
+    const data={nombre,cargo:$("#pe-c").value.trim(),telefono:$("#pe-t").value.trim(),frecuencia:"Por día",sueldo:dia,pagoDia:dia,horasJornada:jor,pagoHora:hora||0,inicio:$("#pe-i").value||f.inicio};
+    try{if(w)await fdb.collection("personal").doc(w.id).update(data);else await fdb.collection("personal").add({...data,activo:true,adelantos:[],creado:Date.now()});
+      m.innerHTML="";toast(w?"Datos actualizados":"Trabajador agregado")}
+    catch(e){toast(fbErr(e));const b=$("#pe-ok");if(b)b.disabled=false}
+  };
+}
+function openAdelanto(id){
+  const w=S.personal.find(x=>x.id===id);if(!w)return;let met="Efectivo";
+  const draw=(monto,nota)=>{
+    const m=sheet(`<h3>Adelanto · ${esc(w.nombre)}</h3><p>Se descontará de sus siguientes pagos.</p>
+      <div class="fields">
+       <label class="f"><span>Monto (S/)</span><input id="ad-m" inputmode="decimal" value="${esc(monto||"")}" placeholder="0.00"></label>
+       <label class="f"><span>Nota</span><input id="ad-n" value="${esc(nota||"")}" maxlength="50" placeholder="Opcional"></label>
+      </div>
+      <div class="cjsub">Con qué se le dio</div>${chipsHtml(METS,met,"mt")}
+      <div class="row"><button class="btn ghost" id="ad-x">Cancelar</button><button class="btn primary" id="ad-ok">Registrar adelanto</button></div>`);
+    m.querySelectorAll("[data-mt]").forEach(b=>b.onclick=()=>{const mm=$("#ad-m").value,nn=$("#ad-n").value;met=b.dataset.mt;draw(mm,nn)});
+    $("#ad-x").onclick=()=>m.innerHTML="";
+    $("#ad-ok").onclick=async()=>{
+      const v=r2(parseFloat($("#ad-m").value)||0);if(!(v>0)){toast("Escribe el monto");return}
+      $("#ad-ok").disabled=true;
+      try{await fdb.collection("personal").doc(w.id).update({adelantos:[...(w.adelantos||[]),{id:"a"+Date.now().toString(36),monto:v,resta:v,metodo:met,at:Date.now(),nota:$("#ad-n").value.trim(),descontado:false,por:S.session?.nombre||""}]});
+        m.innerHTML="";toast("Adelanto registrado: "+money(v))}
+      catch(e){toast(fbErr(e));const b=$("#ad-ok");if(b)b.disabled=false}
+    };
+  };draw();
+}
+/* Saldo pendiente de adelantos (soporta descuentos parciales) */
+const adelResta=a=>a.descontado?0:(a.resta!=null?a.resta:a.monto);
+const adelRestaSum=w=>r2((w.adelantos||[]).reduce((t,a)=>t+adelResta(a),0));
+/* Aplica un descuento de "monto" a los adelantos (más antiguos primero) */
+function aplicarAdel(w,monto){
+  let rest=r2(monto);
+  return(w.adelantos||[]).map(a=>{const r=adelResta(a);if(rest<=0.001||r<=0)return a;const d=Math.min(r,rest);rest=r2(rest-d);const nr=r2(r-d);return{...a,resta:nr,descontado:nr<=0.001}});
+}
+function remDoc(w,fecha,h,mh,bonos,adel,desc,met,nota){
+  return{personalId:w.id,nombre:w.nombre,fecha,desde:fecha,hasta:fecha,horas:r2(parseFloat(h)||0),base:mh.base,extra:mh.extra,bonos,adelantos:adel,descuentos:desc,
+    neto:r2(mh.total+bonos-adel-desc),metodo:met,nota:nota||"",tarifaDia:pagoDia(w),tarifaHora:pagoHora(w),at:Date.now(),por:S.session?.nombre||""};
+}
+/* Pago individual de un día, con bonos/descuentos */
+function openPagoPersonal(id){
+  const w=S.personal.find(x=>x.id===id);if(!w)return;
+  const f={fecha:dayKey(Date.now()),horas:String(jornadaH(w)),bonos:"",desc:"",usarAdel:true,met:"Efectivo",nota:""};
+  const calc=()=>{const mh=montoHoras(w,f.horas),bon=r2(parseFloat(f.bonos)||0),des=r2(parseFloat(f.desc)||0);
+    const ad=f.usarAdel?r2(Math.max(0,Math.min(adelRestaSum(w),mh.total+bon-des))):0;
+    return{mh,bon,des,ad,neto:r2(mh.total+bon-ad-des)}};
+  const sumHtml=()=>{const c=calc(),ya=pagadoEl(w,f.fecha);return`<div class="cjrows" style="margin:10px 0">
+      ${c.mh.extra?`<div><span>Jornada completa</span><b class="num">${money(c.mh.base)}</b></div><div><span>+ ${fmtH((parseFloat(f.horas)||0)-jornadaH(w))} extra × ${money(pagoHora(w))}</span><b class="num">${money(c.mh.extra)}</b></div>`
+        :`<div><span>${(parseFloat(f.horas)||0)>=jornadaH(w)?"Jornada completa":`${fmtH(parseFloat(f.horas)||0)} × ${money(pagoHora(w))}`}</span><b class="num">${money(c.mh.total)}</b></div>`}
+      ${c.bon?`<div><span>+ Bono / propina</span><b class="num">${money(c.bon)}</b></div>`:""}
+      ${c.ad?`<div><span>− Adelanto</span><b class="num">${money(c.ad)}</b></div>`:""}
+      ${c.des?`<div><span>− Otros descuentos</span><b class="num">${money(c.des)}</b></div>`:""}
+      <div style="border-top:1.5px solid var(--ink);padding-top:6px;font-size:18px"><span><b>A pagar</b></span><b class="num" style="color:${c.neto<0?"var(--red)":"inherit"}">${money(c.neto)}</b></div>
+      ${ya.length?`<div style="color:var(--amber);font-weight:800;font-size:12px"><span>Ojo: ya tiene un pago registrado ese día (${money(ya.reduce((t,r)=>t+r.neto,0))})</span></div>`:""}</div>`};
+  const draw=()=>{
+    const m=sheet(`<h3>Pagar · ${esc(w.nombre)}</h3><p>${money(pagoDia(w))} por jornada de ${fmtH(jornadaH(w))} · ${money(pagoHora(w))} la hora</p>
+      <div class="fields">
+       <label class="f"><span>Día trabajado</span><input id="pp-d" type="date" value="${f.fecha}"></label>
+       <label class="f"><span>Horas trabajadas</span><input id="pp-hr" inputmode="decimal" value="${esc(f.horas)}"></label>
+       <label class="f"><span>Bono / propina (S/)</span><input id="pp-bo" inputmode="decimal" value="${esc(f.bonos)}" placeholder="0.00"></label>
+       <label class="f"><span>Otros descuentos (S/)</span><input id="pp-de" inputmode="decimal" value="${esc(f.desc)}" placeholder="0.00"></label>
+       <label class="f full"><span>Nota</span><input id="pp-n" value="${esc(f.nota)}" maxlength="60" placeholder="Opcional"></label>
+      </div>
+      ${adelRestaSum(w)>0?`<label style="display:flex;gap:8px;align-items:center;font-weight:700;font-size:14px;margin-top:10px"><input type="checkbox" id="pp-ad" ${f.usarAdel?"checked":""} style="width:20px;height:20px"> Descontar adelantos (debe ${money(adelRestaSum(w))})</label>`:""}
+      <div id="pp-sum">${sumHtml()}</div>
+      <div class="cjsub" style="margin-top:0">Con qué se paga</div>${chipsHtml(METS,f.met,"mt")}
+      <div class="row"><button class="btn ghost" id="pp-x">Cancelar</button><button class="btn primary" id="pp-ok">Registrar pago</button></div>`);
+    const keep=()=>{f.fecha=$("#pp-d").value||f.fecha;f.horas=$("#pp-hr").value;f.bonos=$("#pp-bo").value;f.desc=$("#pp-de").value;f.nota=$("#pp-n").value;if($("#pp-ad"))f.usarAdel=$("#pp-ad").checked};
+    ["#pp-hr","#pp-bo","#pp-de","#pp-d"].forEach(s=>{const el=$(s);el.oninput=()=>{keep();$("#pp-sum").innerHTML=sumHtml()}});
+    const ck=$("#pp-ad");if(ck)ck.onchange=()=>{keep();$("#pp-sum").innerHTML=sumHtml()};
+    m.querySelectorAll("[data-mt]").forEach(b=>b.onclick=()=>{keep();f.met=b.dataset.mt;draw()});
+    $("#pp-x").onclick=()=>m.innerHTML="";
+    $("#pp-ok").onclick=async()=>{
+      keep();const c=calc();const h=parseFloat(f.horas)||0;
+      if(!(h>0&&h<=24)){toast("Revisa las horas trabajadas");return}
+      if(c.neto<0){toast("El pago no puede ser negativo");return}
+      $("#pp-ok").disabled=true;
+      try{
+        const batch=fdb.batch();
+        batch.set(fdb.collection("remuneraciones").doc(),remDoc(w,f.fecha,h,c.mh,c.bon,c.ad,c.des,f.met,f.nota.trim()));
+        if(c.ad>0)batch.update(fdb.collection("personal").doc(w.id),{adelantos:aplicarAdel(w,c.ad)});
+        await batch.commit();m.innerHTML="";toast(`Pago registrado: ${money(c.neto)}`);
+      }catch(e){toast(fbErr(e));const b=$("#pp-ok");if(b)b.disabled=false}
+    };
+  };draw();
+}
+/* Pago del día a todo el equipo en un solo paso */
+function openPagoDia(){
+  const act=S.personal.filter(w=>w.activo!==false);if(!act.length)return;
+  const st={fecha:dayKey(Date.now()),met:"Efectivo",rows:{}};
+  const init=()=>{act.forEach(w=>{const ya=pagadoEl(w,st.fecha).length>0;st.rows[w.id]={on:!ya,h:String(jornadaH(w)),ya}})};init();
+  const rowCalc=w=>{const r=st.rows[w.id],mh=montoHoras(w,r.h),ad=r2(Math.max(0,Math.min(adelRestaSum(w),mh.total)));return{mh,ad,neto:r2(mh.total-ad)}};
+  const totHtml=()=>{const sel=act.filter(w=>st.rows[w.id].on);const t=sel.reduce((s,w)=>s+rowCalc(w).neto,0);return`${sel.length} persona${sel.length===1?"":"s"} · <b class="num">${money(t)}</b>`};
+  const rowHtml=w=>{const r=st.rows[w.id],c=rowCalc(w);return`<div class="pdrow" data-w="${w.id}" style="display:grid;grid-template-columns:28px 1fr 70px;gap:8px;align-items:center;padding:9px 0;border-bottom:1px dashed var(--line);${r.on?"":"opacity:.55"}">
+      <input type="checkbox" data-pdc="${w.id}" ${r.on?"checked":""} style="width:22px;height:22px">
+      <div><div style="font-weight:800">${esc(w.nombre)}${r.ya?` <span class="paytag ok" style="font-size:10px">ya pagado</span>`:""}</div>
+        <div class="meta" id="pdm-${w.id}">${c.mh.extra?`Jornada + ${fmtH((parseFloat(r.h)||0)-jornadaH(w))} extra`:(parseFloat(r.h)||0)>=jornadaH(w)?"Jornada completa":`${fmtH(parseFloat(r.h)||0)} × ${money(pagoHora(w))}`}${c.ad?` − adel. ${money(c.ad)}`:""} = <b class="num">${money(c.neto)}</b></div></div>
+      <label class="f" style="margin:0"><span style="font-size:10px">Horas</span><input data-pdh="${w.id}" inputmode="decimal" value="${esc(r.h)}" style="padding:8px;text-align:center"></label>
+    </div>`};
+  const draw=()=>{
+    const m=sheet(`<h3>Pagar el día</h3><p>Marca quiénes trabajaron y cuántas horas.</p>
+      <div class="fields"><label class="f full"><span>Día trabajado</span><input id="pd-f" type="date" value="${st.fecha}"></label></div>
+      <div id="pd-rows">${act.map(rowHtml).join("")}</div>
+      <div class="cjsub">Con qué se paga</div>${chipsHtml(METS,st.met,"mt")}
+      <div class="cjrows"><div style="font-size:17px"><span><b>Total a pagar</b></span><span id="pd-tot">${totHtml()}</span></div></div>
+      <div class="note" style="margin:6px 0 10px">Los adelantos pendientes se descuentan solos. Para bonos o descuentos usa “Pagar” en la tarjeta de cada uno.</div>
+      <div class="row"><button class="btn ghost" id="pd-x">Cancelar</button><button class="btn primary" id="pd-ok">Registrar pagos</button></div>`);
+    const upd=id=>{const w=act.find(x=>x.id===id);const row=m.querySelector(`[data-w="${id}"]`);const tmp=document.createElement("div");tmp.innerHTML=rowHtml(w);row.querySelector("#pdm-"+id).innerHTML=tmp.querySelector("#pdm-"+id).innerHTML;row.style.opacity=st.rows[id].on?"1":".55";$("#pd-tot").innerHTML=totHtml()};
+    m.querySelectorAll("[data-pdh]").forEach(i=>i.oninput=()=>{const id=i.dataset.pdh;st.rows[id].h=i.value;if((parseFloat(i.value)||0)>0&&!st.rows[id].on){st.rows[id].on=true;m.querySelector(`[data-pdc="${id}"]`).checked=true}upd(id)});
+    m.querySelectorAll("[data-pdc]").forEach(c=>c.onchange=()=>{st.rows[c.dataset.pdc].on=c.checked;upd(c.dataset.pdc)});
+    $("#pd-f").onchange=()=>{st.fecha=$("#pd-f").value||st.fecha;init();draw()};
+    m.querySelectorAll("[data-mt]").forEach(b=>b.onclick=()=>{st.met=b.dataset.mt;m.querySelectorAll("[data-mt]").forEach(x=>x.setAttribute("aria-pressed",x===b))});
+    $("#pd-x").onclick=()=>m.innerHTML="";
+    $("#pd-ok").onclick=async()=>{
+      const sel=act.filter(w=>st.rows[w.id].on);
+      if(!sel.length){toast("Marca al menos a una persona");return}
+      const bad=sel.find(w=>{const h=parseFloat(st.rows[w.id].h)||0;return!(h>0&&h<=24)});if(bad){toast("Revisa las horas de "+bad.nombre);return}
+      const dup=sel.filter(w=>st.rows[w.id].ya);
+      if(dup.length&&!st.confDup){st.confDup=true;toast(`${dup.map(w=>w.nombre.split(" ")[0]).join(", ")} ya tiene pago ese día. Toca otra vez para confirmar.`);return}
+      $("#pd-ok").disabled=true;
+      try{
+        const batch=fdb.batch();let tot=0;
+        sel.forEach(w=>{const c=rowCalc(w);tot+=c.neto;batch.set(fdb.collection("remuneraciones").doc(),remDoc(w,st.fecha,st.rows[w.id].h,c.mh,0,c.ad,0,st.met,""));
+          if(c.ad>0)batch.update(fdb.collection("personal").doc(w.id),{adelantos:aplicarAdel(w,c.ad)})});
+        await batch.commit();m.innerHTML="";toast(`Pagos registrados: ${money(tot)}`);
+      }catch(e){toast(fbErr(e));const b=$("#pd-ok");if(b)b.disabled=false}
     };
   };draw();
 }
@@ -1619,7 +1864,7 @@ render();
 S.gateMode="loading";renderGate();
 boot();setInterval(()=>{if(S.view==="pedidos")render()},60000);
 /* aviso de nueva versión */
-const APP_VERSION="2026-10-01b";
+const APP_VERSION="2026-10-01d";
 async function checkVersion(){
   try{const t=await fetch(location.pathname+"?nc="+Date.now(),{cache:"no-store"}).then(r=>r.text());
     const m=t.match(/APP_VERSION="([^"]+)"/);
